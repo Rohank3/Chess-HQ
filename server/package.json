@@ -9,9 +9,10 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
-    "test": "node --import tsx --test \"src/**/*.test.ts\""
+    "db:migrate:dry-run": "tsx src/db/migrate.ts --dry-run",
+    "test": "node --import tsx --test-reporter spec --test src/db/migrate.test.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

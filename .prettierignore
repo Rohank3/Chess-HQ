@@ -9,3 +9,6 @@ pnpm-lock.yaml
 
 # local tooling storage (not part of project)
 .zcode/
+
+# no built-in SQL formatter; we hand-format SQL files
+*.sql
