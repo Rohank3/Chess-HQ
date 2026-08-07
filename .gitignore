@@ -47,3 +47,6 @@ tmp/
 
 # local tooling storage (not part of project)
 .zcode/
+
+# local-only study notes, not part of deployed repo
+ARCHITECTURE.md
