@@ -1,0 +1,20 @@
+{
+  "name": "realtime-chess",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time multiplayer chess with Elo matchmaking, server-authoritative game logic, and a synchronized chess clock.",
+  "license": "MIT",
+  "author": "Rohank3 <therohan307@gmail.com>",
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prettier": "^3.4.2"
+  }
+}

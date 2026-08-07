@@ -1,0 +1,49 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build output
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# environment
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.production.example
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# test / coverage
+coverage/
+.nyc_output/
+.vitest-cache/
+
+# typescript
+*.tsbuildinfo
+
+# misc
+.tmp/
+tmp/
+
+# local tooling storage (not part of project)
+.zcode/
