@@ -5,6 +5,7 @@ import cors from 'cors';
 import { env, isProduction } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { healthRouter } from './routes/health.js';
+import { authRouter } from './routes/auth.js';
 
 const app = express();
 
@@ -25,25 +26,33 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 });
 
 app.use('/api', healthRouter);
+app.use('/api/auth', authRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'not_found' });
 });
 
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   const error = err as {
     message?: string;
     status?: number;
     code?: string;
+    publicMessage?: string;
     stack?: string;
   };
+  const status = error.status ?? 500;
+  const isOperational = typeof error.status === 'number' && status >= 400 && status < 500;
   logger.error('unhandled_error', {
+    requestId: req.id,
+    status,
+    code: error.code,
     message: error.message,
-    stack: isProduction ? undefined : error.stack,
+    isOperational,
+    stack: isProduction && !isOperational ? undefined : error.stack,
   });
-  res.status(error.status ?? 500).json({
+  res.status(status).json({
     error: error.code ?? 'internal_error',
-    message: isProduction ? undefined : error.message,
+    message: isProduction ? error.publicMessage : (error.publicMessage ?? error.message),
   });
 });
 
