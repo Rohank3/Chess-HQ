@@ -1,0 +1,113 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  http,
+  storeAuth,
+  clearAuth,
+  getStoredToken,
+  type AuthResponse,
+  type MeResponse,
+} from '../api/http';
+import { disconnectSocket } from '../socket/socket';
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  elo: number;
+  isGuest: boolean;
+}
+
+interface AuthState {
+  user: AuthUser | null;
+  token: string | null;
+  loading: boolean;
+  login: (identifier: string, password: string) => Promise<void>;
+  register: (username: string, email: string | null, password: string) => Promise<void>;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }): React.JSX.Element {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(() => getStoredToken());
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const existing = getStoredToken();
+    if (!existing) {
+      setLoading(false);
+      return;
+    }
+    http
+      .get<MeResponse>('/api/auth/me')
+      .then((res) => {
+        if (cancelled) return;
+        setUser(res.data.user);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearAuth();
+        setToken(null);
+        setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const login = useCallback(async (identifier: string, password: string) => {
+    const res = await http.post<AuthResponse>('/api/auth/login', {
+      identifier,
+      password,
+    });
+    storeAuth(res.data.token);
+    setToken(res.data.token);
+    setUser(res.data.user);
+  }, []);
+
+  const register = useCallback(
+    async (username: string, email: string | null, password: string) => {
+      const res = await http.post<AuthResponse>('/api/auth/register', {
+        username,
+        email,
+        password,
+      });
+      storeAuth(res.data.token);
+      setToken(res.data.token);
+      setUser(res.data.user);
+    },
+    [],
+  );
+
+  const logout = useCallback(() => {
+    clearAuth();
+    setToken(null);
+    setUser(null);
+    disconnectSocket();
+  }, []);
+
+  const value = useMemo<AuthState>(
+    () => ({ user, token, loading, login, register, logout }),
+    [user, token, loading, login, register, logout],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside an AuthProvider');
+  return ctx;
+}

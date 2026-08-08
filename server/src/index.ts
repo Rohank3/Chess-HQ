@@ -2,10 +2,12 @@ import { createServer } from 'node:http';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import { Server } from 'socket.io';
 import { env, isProduction } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
+import { createSocketLayer } from './sockets/index.js';
 
 const app = express();
 
@@ -58,8 +60,22 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
 
 const httpServer = createServer(app);
 
+const io = new Server(httpServer, {
+  cors: {
+    origin: env.CLIENT_ORIGIN,
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+  pingInterval: 12_000,
+  pingTimeout: 10_000,
+  connectTimeout: 10_000,
+  maxHttpBufferSize: 1e5,
+});
+
+createSocketLayer(io);
+
 httpServer.listen(env.PORT, () => {
   logger.info('server_listening', { port: env.PORT, env: env.NODE_ENV });
 });
 
-export { app, httpServer };
+export { app, httpServer, io };
