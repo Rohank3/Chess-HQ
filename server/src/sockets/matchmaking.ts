@@ -2,6 +2,7 @@ import type { Server, Socket } from 'socket.io';
 import { matchmakingQueue } from '../services/matchmaking.js';
 import { queueJoinSchema, type QueueEntry } from '../services/matchmaking.types.js';
 import { createGame } from '../services/games.js';
+import { gameState } from '../services/game-state.js';
 import { pool } from '../db/pool.js';
 import { roomForGame } from './index.js';
 import { logger } from '../utils/logger.js';
@@ -85,6 +86,10 @@ export function registerMatchmakingHandlers(io: Server, socket: Socket): void {
       io.in([result.pair.white.socketId, result.pair.black.socketId]).socketsJoin(
         roomForGame(game.id),
       );
+
+      // Seed the in-memory chess.js instance so the first game:move is O(1)
+      // (no DB rehydrate needed).
+      gameState.seed(game.id, game.fen);
 
       const opponentWhite = toPlayerSummary(result.pair.white);
       const opponentBlack = toPlayerSummary(result.pair.black);
