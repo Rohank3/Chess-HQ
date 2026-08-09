@@ -19,6 +19,39 @@ export interface MeResponse {
   };
 }
 
+// POST /api/auth/guest returns the same shape as register/login but with a
+// short-lived token and an is_guest=true user.
+export type GuestAuthResponse = AuthResponse;
+
+export type GameResult = 'win' | 'loss' | 'draw';
+
+export interface RecentGame {
+  id: string;
+  endedAt: string;
+  termination: string;
+  timeControl: string;
+  myColor: 'w' | 'b';
+  opponent: { id: string; username: string };
+  myEloBefore: number | null;
+  myEloAfter: number | null;
+  myResult: GameResult;
+  eloDelta: number | null;
+}
+
+export interface StatsProfile {
+  username: string;
+  elo: number;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export interface StatsResponse {
+  profile: StatsProfile | null;
+  recentGames: RecentGame[];
+}
+
 export interface ApiError {
   error: string;
   message?: string;

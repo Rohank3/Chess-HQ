@@ -14,10 +14,10 @@ export interface VerifiedToken extends JwtPayload {
 
 type ExpiresIn = Exclude<SignOptions['expiresIn'], undefined>;
 
-export function signToken(payload: JwtPayload): string {
+export function signToken(payload: JwtPayload, expiresIn?: string): string {
   const options: SignOptions = {
     algorithm: 'HS256',
-    expiresIn: env.JWT_ACCESS_TTL as ExpiresIn,
+    expiresIn: (expiresIn ?? env.JWT_ACCESS_TTL) as ExpiresIn,
   };
   return jwt.sign(payload, env.JWT_SECRET, options);
 }

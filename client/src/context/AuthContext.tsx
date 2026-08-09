@@ -13,6 +13,7 @@ import {
   clearAuth,
   getStoredToken,
   type AuthResponse,
+  type GuestAuthResponse,
   type MeResponse,
 } from '../api/http';
 import { disconnectSocket } from '../socket/socket';
@@ -30,6 +31,7 @@ interface AuthState {
   loading: boolean;
   login: (identifier: string, password: string) => Promise<void>;
   register: (username: string, email: string | null, password: string) => Promise<void>;
+  loginAsGuest: () => Promise<void>;
   logout: () => void;
 }
 
@@ -91,6 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
     [],
   );
 
+  const loginAsGuest = useCallback(async () => {
+    const res = await http.post<GuestAuthResponse>('/api/auth/guest', {});
+    storeAuth(res.data.token);
+    setToken(res.data.token);
+    setUser(res.data.user);
+  }, []);
+
   const logout = useCallback(() => {
     clearAuth();
     setToken(null);
@@ -99,8 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ user, token, loading, login, register, logout }),
-    [user, token, loading, login, register, logout],
+    () => ({ user, token, loading, login, register, loginAsGuest, logout }),
+    [user, token, loading, login, register, loginAsGuest, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

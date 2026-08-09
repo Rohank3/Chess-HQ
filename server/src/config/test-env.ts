@@ -9,6 +9,7 @@ export function configureTestEnv(): void {
     DATABASE_URL: 'postgresql://test:test@localhost:5432/chess_test',
     JWT_SECRET: 'test-secret-test-secret-test-secret-test-secret',
     JWT_ACCESS_TTL: '15m',
+    JWT_GUEST_TTL: '2h',
     CLIENT_ORIGIN: 'http://localhost:5173',
     RATE_LIMIT_WINDOW_MS: '60000',
     RATE_LIMIT_MAX: '60',

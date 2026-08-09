@@ -1,48 +1,40 @@
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { ToastViewport } from './ToastViewport';
+import { STATUS_LABEL, STATUS_STYLES, statusDotClass } from './connectionStyles';
 
-const STATUS_STYLES: Record<string, string> = {
-  idle: 'bg-slate-700 text-slate-300',
-  connecting: 'bg-amber-500/20 text-amber-300',
-  open: 'bg-accent-emerald/20 text-accent-emerald',
-  reconnecting: 'bg-amber-500/20 text-amber-300',
-  error: 'bg-accent-rose/20 text-accent-rose',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  idle: 'Signed out',
-  connecting: 'Connecting…',
-  open: 'Live',
-  reconnecting: 'Reconnecting…',
-  error: 'Connection error',
-};
-
+/**
+ * Renders the fixed top-right connection pill only when the user is
+ * signed out (public pages have no Navbar). When signed in, the Navbar
+ * owns the inline connection indicator, so this component just mounts the
+ * toast viewport -- there's never two fixed connection pills on one screen.
+ */
 export function ConnectionStatus(): React.JSX.Element {
   const { user } = useAuth();
   const { status } = useSocket();
 
-  if (!user) return <ToastViewport />;
-
-  return (
-    <>
-      <div className="fixed top-4 right-4 z-40">
-        <span
-          className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
-            STATUS_STYLES[status] ?? STATUS_STYLES.idle
-          }`}
-        >
+  if (!user) {
+    // Signed out: keep the existing fixed pill on public pages so a
+    // reconnecting visitor still sees connection state without a Navbar.
+    return (
+      <>
+        <div className="fixed top-4 right-4 z-40">
           <span
-            className={`size-1.5 rounded-full ${
-              status === 'open'
-                ? 'bg-accent-emerald shadow-[0_0_8px_2px_var(--color-accent-emerald)]'
-                : 'bg-current'
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+              STATUS_STYLES[status]
             }`}
-          />
-          {STATUS_LABEL[status] ?? status}
-        </span>
-      </div>
-      <ToastViewport />
-    </>
-  );
+          >
+            <span
+              className={`size-1.5 rounded-full ${statusDotClass(status)}`}
+              aria-hidden
+            />
+            {STATUS_LABEL[status]}
+          </span>
+        </div>
+        <ToastViewport />
+      </>
+    );
+  }
+
+  return <ToastViewport />;
 }
