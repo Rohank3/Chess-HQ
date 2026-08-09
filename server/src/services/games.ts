@@ -165,6 +165,50 @@ export class GameNotFoundError extends Error {
   }
 }
 
+/**
+ * Record a draw offer: sets draw_offered_by to the offerer and
+ * draw_offer_expires_at to now + ttlMs. The schema's
+ * games_draw_offer_expires_at CHECK requires the offerer to be set when
+ * the expiry is set, so the two columns are always written together.
+ */
+export async function setDrawOffer(
+  gameId: string,
+  offererUserId: string,
+  ttlMs: number,
+): Promise<GameRow> {
+  const result = await pool.query<RawGameRow>(
+    `UPDATE games SET
+       draw_offered_by = $2,
+       draw_offer_expires_at = now() + ($3::bigint || ' milliseconds')::interval
+     WHERE id = $1 AND ended_at IS NULL
+     RETURNING ${SELECT_COLUMNS}`,
+    [gameId, offererUserId, ttlMs],
+  );
+  const row = result.rows[0];
+  if (!row) throw new GameNotFoundError(gameId);
+  return mapGameRow(row);
+}
+
+/**
+ * Clear any pending draw offer (used on decline, and also on the next
+ * move: a draw offer doesn't survive the opponent moving -- once they
+ * move, they've effectively declined). Safe to call when no offer is
+ * outstanding (no-op UPDATE).
+ */
+export async function clearDrawOffer(gameId: string): Promise<GameRow> {
+  const result = await pool.query<RawGameRow>(
+    `UPDATE games SET
+       draw_offered_by = NULL,
+       draw_offer_expires_at = NULL
+     WHERE id = $1 AND ended_at IS NULL
+     RETURNING ${SELECT_COLUMNS}`,
+    [gameId],
+  );
+  const row = result.rows[0];
+  if (!row) throw new GameNotFoundError(gameId);
+  return mapGameRow(row);
+}
+
 export interface RecordMoveInput {
   gameId: string;
   fen: string;

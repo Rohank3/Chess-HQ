@@ -42,6 +42,11 @@ const schema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  // How long a draw offer stays open before a stale-offer watchdog reaps
+  // it. A 30s expiry mirrors the Lichess default -- enough for a real
+  // opponent to read the offer and respond, short enough that an abandoned
+  // offer doesn't leave a game in a "offer pending" limbo forever.
+  DRAW_OFFER_TTL_MS: z.coerce.number().int().positive().default(30_000),
 });
 
 export type AppEnv = z.infer<typeof schema>;
