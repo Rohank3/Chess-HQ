@@ -1,11 +1,14 @@
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from '../middleware/authSocket.js';
 import { attachSocketAuth } from '../middleware/authSocket.js';
+import { matchmakingQueue } from '../services/matchmaking.js';
+import { registerMatchmakingHandlers } from './matchmaking.js';
 import { registerUserSocket, unregisterUserSocket, rejoinActiveGames } from './lobby.js';
 import { logger } from '../utils/logger.js';
 
 export function createSocketLayer(io: Server): void {
   attachSocketAuth(io);
+  matchmakingQueue.startCleanup();
 
   io.on('connection', (rawSocket) => {
     const socket = rawSocket as AuthenticatedSocket;
@@ -24,6 +27,8 @@ export function createSocketLayer(io: Server): void {
         const message = err instanceof Error ? err.message : 'unknown';
         logger.error('socket_rejoin_failed', { userId, sid: socket.id, message });
       });
+
+    registerMatchmakingHandlers(io, socket);
 
     socket.on('disconnect', (reason) => {
       unregisterUserSocket(userId, socket.id);

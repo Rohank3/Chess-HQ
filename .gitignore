@@ -32,6 +32,8 @@ lerna-debug.log*
 Thumbs.db
 *.swp
 *.swo
+# MSYS/Git Bash misinterprets a `2>nul` redirect as a real filename
+/nul
 
 # test / coverage
 coverage/
