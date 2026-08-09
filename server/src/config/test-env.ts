@@ -13,6 +13,7 @@ export function configureTestEnv(): void {
     RATE_LIMIT_WINDOW_MS: '60000',
     RATE_LIMIT_MAX: '60',
     LOG_LEVEL: 'warn',
+    DRAW_OFFER_TTL_MS: '30000',
   };
 
   for (const [key, value] of Object.entries(testDefaults)) {
