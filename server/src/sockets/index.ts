@@ -3,6 +3,7 @@ import type { AuthenticatedSocket } from '../middleware/authSocket.js';
 import { attachSocketAuth } from '../middleware/authSocket.js';
 import { matchmakingQueue } from '../services/matchmaking.js';
 import { registerMatchmakingHandlers } from './matchmaking.js';
+import { registerGameHandlers } from './game.js';
 import { registerUserSocket, unregisterUserSocket, rejoinActiveGames } from './lobby.js';
 import { logger } from '../utils/logger.js';
 
@@ -29,6 +30,7 @@ export function createSocketLayer(io: Server): void {
       });
 
     registerMatchmakingHandlers(io, socket);
+    registerGameHandlers(io, socket);
 
     socket.on('disconnect', (reason) => {
       unregisterUserSocket(userId, socket.id);
