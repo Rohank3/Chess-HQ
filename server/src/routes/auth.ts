@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomFillSync } from 'node:crypto';
 import { pool } from '../db/pool.js';
 import { hashPassword, verifyPassword } from '../security/argon.js';
 import { signToken } from '../security/jwt.js';
@@ -6,6 +7,7 @@ import { registerSchema, loginSchema } from '../security/validation.js';
 import { requireAuth } from '../middleware/authHttp.js';
 import { rateLimit } from '../security/rate-limit.js';
 import { badRequest, conflict, unauthorized } from '../utils/http-error.js';
+import { env } from '../config/env.js';
 
 export const authRouter = Router();
 
@@ -129,3 +131,65 @@ authRouter.get('/me', requireAuth, async (req, res, next) => {
     next(err);
   }
 });
+
+// --- Guest flow ---------------------------------------------------------------
+// A "play as guest" session is a use-and-discard account: a random username,
+// no password row (satisfies the users_auth_xor CHECK), and a short-lived
+// access token. Guests are screened out of the ranked queue (Step 5), so
+// this flow is deliberately casual-only -- visible in the lobby but not on
+// any leaderboard. The flow avoids a sign-up form so a brand-new visitor can
+// be inside a game within seconds.
+function randomGuestSuffix(): string {
+  // 6 base62 characters gives ~62^6 = 5.7e10 combinations; collision risk at
+  // hobby scale is negligible, and we re-try on a UNIQUE violation anyway
+  // when the DB is reachable.
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  const buf = randomFillSync(new Uint8Array(6)) as Uint8Array;
+  for (let i = 0; i < 6; i++) out += alphabet[buf[i]! % 62];
+  return out;
+}
+
+async function mintGuestUsername(): Promise<string> {
+  // The users.username regex allows [A-Za-z0-9_-], so `Guest_<base62>` is
+  // always valid. Try a handful of suffixes before falling back so a streak
+  // of collisions (vanishingly unlikely) doesn't reject the request.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = `Guest_${randomGuestSuffix()}`;
+    const dupe = await pool.query<{ id: string }>(
+      'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
+      [candidate],
+    );
+    if (dupe.rowCount === 0) return candidate;
+  }
+  return `Guest_${randomGuestSuffix()}${randomGuestSuffix()}`;
+}
+
+authRouter.post(
+  '/guest',
+  rateLimit({ scope: 'guest', max: 10, windowMs: 60_000 }),
+  async (_req, res, next) => {
+    try {
+      const username = await mintGuestUsername();
+      const result = await pool.query<{
+        id: string;
+        username: string;
+        elo: number;
+        is_guest: boolean;
+      }>(
+        `INSERT INTO users (username, is_guest)
+         VALUES ($1, TRUE)
+         RETURNING id, username, elo, is_guest`,
+        [username],
+      );
+      const created = result.rows[0]!;
+      const token = signToken(
+        { sub: created.id, name: created.username, guest: true },
+        env.JWT_GUEST_TTL,
+      );
+      res.status(201).json({ token, user: publicUser(created) });
+    } catch (err) {
+      next(err);
+    }
+  },
+);

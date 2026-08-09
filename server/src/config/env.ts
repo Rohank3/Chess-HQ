@@ -38,6 +38,10 @@ const schema = z.object({
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters (use `openssl rand -hex 32`)'),
   JWT_ACCESS_TTL: z.string().default('15m'),
+  // Guest tokens are deliberately shorter so a "play as guest" session is a
+  // use-and-discard flow: 2h is enough for a couple of games, short enough
+  // that a leaked guest token can't be reused tomorrow.
+  JWT_GUEST_TTL: z.string().default('2h'),
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),

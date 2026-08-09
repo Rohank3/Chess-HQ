@@ -9,13 +9,14 @@ interface SubmitError {
 }
 
 export function Register(): React.JSX.Element {
-  const { register } = useAuth();
+  const { register, loginAsGuest } = useAuth();
   const { push } = useToast();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [guestBusy, setGuestBusy] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -29,6 +30,20 @@ export function Register(): React.JSX.Element {
       push('error', message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function continueAsGuest() {
+    setGuestBusy(true);
+    try {
+      await loginAsGuest();
+      push('success', 'Playing as a guest.');
+      navigate('/dashboard');
+    } catch (err) {
+      const { message } = err as SubmitError;
+      push('error', message);
+    } finally {
+      setGuestBusy(false);
     }
   }
 
@@ -92,6 +107,19 @@ export function Register(): React.JSX.Element {
             {busy ? 'Creating…' : 'Create account'}
           </button>
         </form>
+        <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+          <span className="h-px flex-1 bg-slate-800" />
+          or
+          <span className="h-px flex-1 bg-slate-800" />
+        </div>
+        <button
+          type="button"
+          onClick={continueAsGuest}
+          disabled={guestBusy}
+          className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {guestBusy ? 'Starting…' : 'Continue as guest'}
+        </button>
         <p className="mt-6 text-center text-sm text-slate-400">
           Already have an account?{' '}
           <Link to="/login" className="text-neon-400 hover:text-neon-500">

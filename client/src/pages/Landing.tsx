@@ -1,8 +1,32 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+
+interface SubmitError {
+  code: string;
+  message: string;
+}
 
 export function Landing(): React.JSX.Element {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, loginAsGuest } = useAuth();
+  const { push } = useToast();
+  const navigate = useNavigate();
+  const [guestBusy, setGuestBusy] = useState(false);
+
+  async function playAsGuest() {
+    setGuestBusy(true);
+    try {
+      await loginAsGuest();
+      push('success', 'Playing as a guest.');
+      navigate('/dashboard');
+    } catch (err) {
+      const { message } = err as SubmitError;
+      push('error', message);
+    } finally {
+      setGuestBusy(false);
+    }
+  }
 
   return (
     <main className="relative isolate overflow-hidden">
@@ -53,16 +77,16 @@ export function Landing(): React.JSX.Element {
               </Link>
               <button
                 type="button"
-                disabled
-                title="Coming in Step 8"
-                className="cursor-not-allowed rounded-lg border border-slate-700 bg-slate-900/40 px-6 py-3 text-sm font-semibold text-slate-500"
+                onClick={playAsGuest}
+                disabled={guestBusy}
+                className="rounded-lg border border-slate-700 bg-slate-900/60 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Play as Guest
+                {guestBusy ? 'Starting…' : 'Play as Guest'}
               </button>
               <button
                 type="button"
                 disabled
-                title="Coming in Step 5"
+                title="Coming in Step 9"
                 className="cursor-not-allowed rounded-lg border border-neon-600/30 bg-neon-600/5 px-6 py-3 text-sm font-semibold text-neon-500/40"
               >
                 Join Matchmaking Queue

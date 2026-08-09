@@ -7,6 +7,7 @@ import { env, isProduction } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
+import { statsRouter } from './routes/stats.js';
 import { createSocketLayer } from './sockets/index.js';
 
 const app = express();
@@ -29,6 +30,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/stats', statsRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'not_found' });
