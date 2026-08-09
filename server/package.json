@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:dry-run": "tsx src/db/migrate.ts --dry-run",
-    "test": "node --import ./src/config/test-env.ts --import tsx --test-reporter spec --test src/db/migrate.test.ts src/security/argon.test.ts src/security/jwt.test.ts src/security/validation.test.ts"
+    "test": "node --import ./src/config/test-env.ts --import tsx --test-reporter spec --test src/db/migrate.test.ts src/security/argon.test.ts src/security/jwt.test.ts src/security/validation.test.ts src/services/matchmaking.test.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
