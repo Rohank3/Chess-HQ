@@ -42,7 +42,15 @@ const schema = z.object({
   // use-and-discard flow: 2h is enough for a couple of games, short enough
   // that a leaked guest token can't be reused tomorrow.
   JWT_GUEST_TTL: z.string().default('2h'),
-  CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
+  // Origins never carry a path, but a stray trailing slash in the dashboard
+  // value silently breaks the exact-match CORS compare ("'...netlify.app/'
+  // is not equal to the supplied origin"). Normalize it so a paste mistake
+  // can't take the whole site down.
+  CLIENT_ORIGIN: z
+    .string()
+    .url()
+    .default('http://localhost:5173')
+    .transform((v) => v.replace(/\/+$/, '')),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
