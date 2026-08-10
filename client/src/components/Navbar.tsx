@@ -29,19 +29,22 @@ export function Navbar(): React.JSX.Element | null {
           <span className="text-sm font-semibold tracking-tight text-slate-100">
             Chess-HQ
           </span>
-        </Link>
-
-        <div className="flex items-center gap-3 sm:gap-4">
+        </Link>        <div className="flex items-center gap-3 sm:gap-4">
           <span
-            className={`hidden items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex ${
-              STATUS_STYLES[status]
-            }`}
+            className={`hidden items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex ${STATUS_STYLES[status]}`}
             title={STATUS_LABEL[status]}
             aria-label={`Connection: ${STATUS_LABEL[status]}`}
           >
             <span className={`size-1.5 rounded-full ${statusDotClass(status)}`} aria-hidden />
             {STATUS_LABEL[status]}
           </span>
+
+          <Link
+            to="/game"
+            className="rounded-lg bg-neon-500 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-neon-400"
+          >
+            Play
+          </Link>
 
           <Link
             to="/dashboard"

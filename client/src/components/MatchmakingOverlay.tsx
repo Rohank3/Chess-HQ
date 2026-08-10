@@ -3,13 +3,19 @@ import { useGameContext } from '../context/GameContext';
 // Match the server's widening ceiling (server: maxDeltaElo=400).
 const MAX_DELTA = 400;
 
-interface PresetProps { timeControl: string; label: string; initialMs: number; incrementMs: number }
+interface PresetProps {
+  timeControl: string;
+  label: string;
+  detail: string;
+  initialMs: number;
+  incrementMs: number;
+}
 
 const PRESETS: PresetProps[] = [
-  { timeControl: 'blitz', label: 'Blitz 3+2', initialMs: 180_000, incrementMs: 2_000 },
-  { timeControl: 'blitz', label: 'Blitz 5+0', initialMs: 300_000, incrementMs: 0 },
-  { timeControl: 'rapid', label: 'Rapid 10+0', initialMs: 600_000, incrementMs: 0 },
-  { timeControl: 'rapid', label: 'Rapid 15+10', initialMs: 900_000, incrementMs: 10_000 },
+  { timeControl: 'blitz', label: 'Blitz 3+2', detail: '3 min · +2s / move', initialMs: 180_000, incrementMs: 2_000 },
+  { timeControl: 'blitz', label: 'Blitz 5+0', detail: '5 min · no increment', initialMs: 300_000, incrementMs: 0 },
+  { timeControl: 'rapid', label: 'Rapid 10+0', detail: '10 min · no increment', initialMs: 600_000, incrementMs: 0 },
+  { timeControl: 'rapid', label: 'Rapid 15+10', detail: '15 min · +10s / move', initialMs: 900_000, incrementMs: 10_000 },
 ];
 
 /**
@@ -31,9 +37,29 @@ export function MatchmakingOverlay(): React.JSX.Element | null {
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6">
       <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/40 p-8">
-        <h2 className="text-sm font-medium tracking-wide text-slate-400 uppercase">
-          {searching ? 'Searching…' : 'Find a game'}
-        </h2>
+        <div className="flex items-center gap-2.5">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-4 text-neon-400"
+            aria-hidden
+          >
+            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+          </svg>
+          <h2 className="text-sm font-medium tracking-wide text-slate-400 uppercase">
+            {searching ? 'Searching for an opponent…' : 'Find a game'}
+          </h2>
+        </div>
+
+        {!searching && (
+          <p className="mt-3 text-sm text-slate-400">
+            Pick a time control and get paired with a player near your rating.
+          </p>
+        )}
 
         {searching && (
           <div className="mt-4">
@@ -45,6 +71,10 @@ export function MatchmakingOverlay(): React.JSX.Element | null {
             </div>
             <p className="mt-2 text-xs text-slate-400">
               Elo search window: ±{searchDelta}
+            </p>
+            <p className="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs leading-relaxed text-slate-500">
+              Keep this tab open. To test, open a second window, play as guest,
+              and pick the same time control — you'll match instantly.
             </p>
           </div>
         )}
@@ -62,9 +92,12 @@ export function MatchmakingOverlay(): React.JSX.Element | null {
                 key={preset.label}
                 type="button"
                 onClick={() => joinQueue(preset)}
-                className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-neon-500 hover:bg-slate-800 hover:text-neon-400"
+                className="group flex flex-col items-start rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3 text-left transition hover:border-neon-500 hover:bg-slate-800"
               >
-                {preset.label}
+                <span className="text-sm font-semibold text-slate-200 transition group-hover:text-neon-400">
+                  {preset.label}
+                </span>
+                <span className="mt-0.5 text-xs text-slate-500">{preset.detail}</span>
               </button>
             ))}
           </div>

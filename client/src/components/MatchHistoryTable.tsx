@@ -57,7 +57,7 @@ export function MatchHistoryTable({ games }: MatchHistoryTableProps): React.JSX.
     return (
       <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 px-6 py-12 text-center">
         <p className="text-sm text-slate-500">
-          No games yet. Matchmaking opens in the next step.
+          No games yet. Hit Play and queue up for your first match.
         </p>
       </div>
     );

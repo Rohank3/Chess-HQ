@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useStats } from '../hooks/useStats';
 import { Spinner } from '../components/Spinner';
@@ -49,26 +50,34 @@ export function Dashboard(): React.JSX.Element {
               · {gamesPlayed} game{gamesPlayed === 1 ? '' : 's'} played
             </p>
           </div>
-          <dl className="flex gap-3">
-            <div className="rounded-lg border border-accent-emerald/40 bg-accent-emerald/10 px-3 py-2 text-center">
-              <dt className="text-xs font-medium tracking-wide text-accent-emerald uppercase">
-                Wins
-              </dt>
-              <dd className="mt-1 font-mono text-lg text-accent-emerald">{wins}</dd>
-            </div>
-            <div className="rounded-lg border border-accent-rose/40 bg-accent-rose/10 px-3 py-2 text-center">
-              <dt className="text-xs font-medium tracking-wide text-accent-rose uppercase">
-                Losses
-              </dt>
-              <dd className="mt-1 font-mono text-lg text-accent-rose">{losses}</dd>
-            </div>
-            <div className="rounded-lg border border-slate-600/40 bg-slate-600/10 px-3 py-2 text-center">
-              <dt className="text-xs font-medium tracking-wide text-slate-300 uppercase">
-                Draws
-              </dt>
-              <dd className="mt-1 font-mono text-lg text-slate-200">{draws}</dd>
-            </div>
-          </dl>
+          <div className="flex flex-col items-stretch gap-4 sm:items-end">
+            <dl className="flex gap-3">
+              <div className="rounded-lg border border-accent-emerald/40 bg-accent-emerald/10 px-3 py-2 text-center">
+                <dt className="text-xs font-medium tracking-wide text-accent-emerald uppercase">
+                  Wins
+                </dt>
+                <dd className="mt-1 font-mono text-lg text-accent-emerald">{wins}</dd>
+              </div>
+              <div className="rounded-lg border border-accent-rose/40 bg-accent-rose/10 px-3 py-2 text-center">
+                <dt className="text-xs font-medium tracking-wide text-accent-rose uppercase">
+                  Losses
+                </dt>
+                <dd className="mt-1 font-mono text-lg text-accent-rose">{losses}</dd>
+              </div>
+              <div className="rounded-lg border border-slate-600/40 bg-slate-600/10 px-3 py-2 text-center">
+                <dt className="text-xs font-medium tracking-wide text-slate-300 uppercase">
+                  Draws
+                </dt>
+                <dd className="mt-1 font-mono text-lg text-slate-200">{draws}</dd>
+              </div>
+            </dl>
+            <Link
+              to="/game"
+              className="rounded-lg bg-neon-500 px-5 py-2.5 text-center text-sm font-semibold text-slate-950 shadow-[0_0_16px_-4px_var(--color-neon-500)] transition hover:bg-neon-400 sm:w-auto"
+            >
+              Play a game
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -99,6 +99,12 @@ function GameRoom(): React.JSX.Element {
               )}
             </div>
             <div className="flex items-center gap-3">
+              {!isGameOver && snapshot && !isMyTurn && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-500/30 bg-neon-500/10 px-2 py-0.5 text-[11px] font-medium text-neon-400">
+                  <span className="size-1 rounded-full bg-neon-400" aria-hidden />
+                  Opponent to move
+                </span>
+              )}
               {myColor && <CapturedPieces by={myColor === 'w' ? 'b' : 'w'} />}
               <GameTimer
                 ms={myColor === 'w' ? blackMs : whiteMs}
@@ -136,6 +142,12 @@ function GameRoom(): React.JSX.Element {
                 flagFallen={myColor === 'w' ? whiteMs <= 0 : blackMs <= 0}
               />
             </div>
+            {!isGameOver && snapshot && isMyTurn && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-500/30 bg-neon-500/10 px-2 py-0.5 text-[11px] font-medium text-neon-400">
+                <span className="size-1 rounded-full bg-neon-400 shadow-[0_0_6px_1px_var(--color-neon-400)]" aria-hidden />
+                Your move
+              </span>
+            )}
           </div>
 
           {/* Controls */}

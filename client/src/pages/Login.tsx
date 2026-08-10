@@ -49,6 +49,15 @@ export function Login(): React.JSX.Element {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-12">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-8">
+        <div className="mb-6 flex items-center justify-center gap-2.5">
+          <span
+            aria-hidden
+            className="size-2 rounded-full bg-neon-400 shadow-[0_0_10px_3px_var(--color-neon-400)]"
+          />
+          <span className="text-sm font-semibold tracking-[0.25em] text-slate-200 uppercase">
+            Chess-HQ
+          </span>
+        </div>
         <h1 className="text-2xl font-semibold text-slate-100">Sign in</h1>
         <p className="mt-2 text-sm text-slate-400">Pick up where you left off.</p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
