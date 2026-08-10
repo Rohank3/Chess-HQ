@@ -24,7 +24,9 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # Match the local dev Node (24) -- Vite 6 + Rollup crashes with the
+  # namespace-mapping 'reading get' error on Netlify's Node 20 image.
+  NODE_VERSION = "24"
 
 # SPA fallback: every path resolves to index.html with a 200 (internal rewrite),
 # so the browser keeps the deep link and react-router routes it on the client.
