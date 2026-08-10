@@ -1,0 +1,84 @@
+# Render Blueprint for Chess-HQ.
+#
+# This single file provisions the whole backend stack:
+#   - a managed Render Postgres instance (chess-db) providing DATABASE_URL, and
+#   - a Node web service (chess-server) running the compiled Express + Socket.IO
+#     backend.
+#
+# Apply with `render blueprint deploy` from the repo root (or connect the repo
+# in the Render dashboard and pick this file). The `preDeployCommand` below is
+# the crucial bit: it runs `npm run db:migrate` as a Release build before each
+# deploy, so schema changes are applied transactionally and out-of-band of the
+# running server process -- matching the "migrations are an explicit release
+# step, never run at boot" rule established in ARCHITECTURE.md Step 2. The DB
+# resource is provisioned first, so DATABASE_URL is already bound by the time
+# the preDeployCommand runs.
+#
+# Secrets (JWT_SECRET) are intentionally left as `sync: false` -- paste a real
+# `openssl rand -hex 32` value into the Render dashboard after the first apply.
+# Never commit a production secret to the repo.
+
+databases:
+  - name: chess-db
+    databaseName: chess
+    plan: starter
+    # Render supports `postgreSQL` as the managed engine; the bench's
+    # 001_init.sql runs `CREATE EXTENSION IF NOT EXISTS pgcrypto` itself, so no
+    # extra extension wiring is needed here.
+
+services:
+  - type: web
+    name: chess-server
+    runtime: node
+    plan: starter
+    # Render's service root is the repo root. The repo is deliberately laid out
+    # as a script-only root package.json + per-workspace package.json files,
+    # with NO npm-workspace hoisting (Step 1 rationale). Render therefore runs
+    # every command with `npm --prefix server` so install/build/start/migrate
+    # all resolve against the server workspace's own package.json + node_modules,
+    # exactly mirroring the local `npm --prefix server run ...` convention used
+    # throughout the README and ARCHITECTURE.md (e.g. Step 2's db:migrate line).
+    buildCommand: npm install --prefix server && npm run build --prefix server
+    startCommand: npm start --prefix server
+    # Release command: apply pending migrations before each deploy. The migrate
+    # runner wraps each *.sql file in its own transaction and records applied
+    # rows in `_migrations`, so this is idempotent -- a redeploy of unchanged
+    # schema is a no-op. Failed migrations roll back the single file's
+    # transaction and fail the deploy (never partially mutating the schema).
+    preDeployCommand: npm --prefix server run db:migrate
+    healthCheckPath: /api/health
+    autoDeploy: true
+    # Single instance is an explicit constraint, not an accident: the in-memory
+    # rate-limit buckets (Step 3) and the in-memory Socket.IO lobby + matchmaking
+    # queue (Steps 4-5) are per-process. Scaling horizontally would fragment the
+    # rate-limit buckets across instances and break the matchmaking queue's
+    # global view; a Socket.IO Redis adapter + shared queue would be the next
+    # step. That horizontal-scale pass is deliberately deferred (see Step 10's
+    # "Out of scope" list and the Step 11 scalability notes).
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # DATABASE_URL is injected from the chess-db resource above -- do not set
+      # it by hand. Sslmode is handled by Render's connection string.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chess-db
+          property: connectionString
+      # HS256 JWT signing secret. `sync: false` keeps it out of this file -- a
+      # maintainer must paste `openssl rand -hex 32` output into the Render
+      # dashboard. Rotating it invalidates all live tokens (a deliberate
+      # kill-switch). min 32 chars enforced by server/src/config/env.ts.
+      - key: JWT_SECRET
+        sync: false
+      # The browser origin Netlify serves the SPA from. Used by both the HTTP
+      # `cors` middleware and the Socket.IO `cors` config in src/index.ts, and
+      # by Helmet's CSP `connectSrc`. Set this to your real Netlify URL after
+      # provisioning the frontend (e.g. https://chess-hq.netlify.app).
+      - key: CLIENT_ORIGIN
+        sync: false
+      # Render sits behind exactly one trusted proxy. Setting TRUST_PROXY_HOPS=1
+      # makes Express read the real client IP from X-Forwarded-For, which the
+      # per-IP rate limiter keys on (Step 10's trust-proxy rationale). Dev stays
+      # 0 so req.ip is the direct socket peer.
+      - key: TRUST_PROXY_HOPS
+        value: '1'
