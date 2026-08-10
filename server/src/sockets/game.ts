@@ -18,9 +18,10 @@ import {
   type ClockState,
   type Side,
 } from '../services/clock.js';
-import { env } from '../config/env.js';
+import { env, isProduction } from '../config/env.js';
 import { roomForGame } from './index.js';
 import { logger } from '../utils/logger.js';
+import type { AuthenticatedSocket } from '../middleware/authSocket.js';
 
 /**
  * Authoritative game-move socket handlers.
@@ -142,6 +143,10 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
 
       if (chess.turn() !== moverColor) {
         ack?.({ ok: false, error: 'not_your_turn' });
+        // A client that spams moves out of turn is either buggy or
+        // malicious -- treat it as a strike and disconnect after the
+        // threshold so the server isn't a free DB-read amplifier.
+        if (recordIllegal(socket)) return;
         return;
       }
 
@@ -152,6 +157,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
           : chess.move({ from, to });
       } catch {
         ack?.({ ok: false, error: 'illegal_move', message: 'Illegal move' });
+        recordIllegal(socket);
         return;
       }
 
@@ -206,7 +212,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('game_move_failed', { sid: socket.id, message });
-      ack?.({ ok: false, error: 'internal_error', message });
+      ack?.({ ok: false, error: 'internal_error', message: safeErrorMessage(err) });
     }
   });
 
@@ -247,7 +253,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('game_resign_failed', { sid: socket.id, message });
-      ack?.({ ok: false, error: 'internal_error', message });
+      ack?.({ ok: false, error: 'internal_error', message: safeErrorMessage(err) });
     }
   });
 
@@ -286,7 +292,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('draw_offer_failed', { sid: socket.id, message });
-      ack?.({ ok: false, error: 'internal_error', message });
+      ack?.({ ok: false, error: 'internal_error', message: safeErrorMessage(err) });
     }
   });
 
@@ -336,7 +342,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('draw_accept_failed', { sid: socket.id, message });
-      ack?.({ ok: false, error: 'internal_error', message });
+      ack?.({ ok: false, error: 'internal_error', message: safeErrorMessage(err) });
     }
   });
 
@@ -374,7 +380,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('draw_decline_failed', { sid: socket.id, message });
-      ack?.({ ok: false, error: 'internal_error', message });
+      ack?.({ ok: false, error: 'internal_error', message: safeErrorMessage(err) });
     }
   });
 }
@@ -486,6 +492,44 @@ function colorOf(userId: string, game: GameRow): 'w' | 'b' | null {
   if (userId === game.whiteUserId) return 'w';
   if (userId === game.blackUserId) return 'b';
   return null;
+}
+
+/**
+ * Increment the per-socket illegal-move counter and disconnect the socket
+ * once it crosses `env.MAX_ILLEGAL_MOVES`. The count lives on `socket.data`
+ * (seeded to 0 by the auth handshake in `authSocket.ts`) so it dies with the
+ * connection -- no module-level WeakMap to reap, and a fresh connection from
+ * the same user starts at zero (a real "oops, misclicked" budget reset).
+ *
+ * Returns `true` once the threshold is reached so the caller can short-circuit
+ * any remaining handler work. The `spam_guard` ack fires ahead of the
+ * disconnect so the client can surface a "you've been disconnected for spam"
+ * message before the transport tears down. The spam vector this guards
+ * against is `game:move`; the resign/draw:offer/draw:accept/draw:decline
+ * handlers are low-rate and intentionally not counted.
+ */
+function recordIllegal(socket: Socket): boolean {
+  const data = socket as AuthenticatedSocket;
+  data.data.illegalMoves = (data.data.illegalMoves ?? 0) + 1;
+  if (data.data.illegalMoves >= env.MAX_ILLEGAL_MOVES) {
+    logger.warn('socket_disconnect_spam', {
+      sid: socket.id,
+      count: data.data.illegalMoves,
+    });
+    socket.emit('game:illegal', { ok: false, error: 'spam_guard', message: 'Too many illegal moves' });
+    socket.disconnect(true);
+    return true;
+  }
+  return false;
+}
+
+/** Scrub a thrown error's message before it leaves the socket in
+ *  production -- the HTTP error handler already does this; the socket path
+ *  previously leaked raw `err.message` (which can carry internal paths or
+ *  pg error text) to any authenticated client. Returns a safe external
+ *  string for ack envelopes. */
+function safeErrorMessage(err: unknown): string {
+  return isProduction ? 'Internal error' : (err instanceof Error ? err.message : 'Internal error');
 }
 
 /**

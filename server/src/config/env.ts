@@ -51,6 +51,17 @@ const schema = z.object({
   // opponent to read the offer and respond, short enough that an abandoned
   // offer doesn't leave a game in a "offer pending" limbo forever.
   DRAW_OFFER_TTL_MS: z.coerce.number().int().positive().default(30_000),
+  // Per-socket illegal-move threshold. A socket that pushes this many
+  // illegal/not-your-turn moves is force-disconnected -- the cheapest move-
+  // spam guard that still lets a real player misclick a few times. The count
+  // lives on socket.data so it dies with the connection (no global map to
+  // reap). 5 is picked as "generous to clumsy humans, hostile to bots".
+  MAX_ILLEGAL_MOVES: z.coerce.number().int().positive().default(5),
+  // How many proxy hops sit in front of the server. Render puts exactly one
+  // trusted proxy in front, so prod sets TRUST_PROXY_HOPS=1 and Express's
+  // req.ip reads the real client address out of X-Forwarded-For (which the
+  // rate-limit buckets on). Dev is 0 so req.ip is the direct socket peer.
+  TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
 });
 
 export type AppEnv = z.infer<typeof schema>;

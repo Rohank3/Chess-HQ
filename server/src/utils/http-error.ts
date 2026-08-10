@@ -26,3 +26,6 @@ export const notFound = (code = 'not_found', message?: string): HttpError =>
 
 export const conflict = (code = 'conflict', message?: string): HttpError =>
   new HttpError(409, code, message);
+
+export const tooManyRequests = (code = 'rate_limited', message?: string): HttpError =>
+  new HttpError(429, code, message);

@@ -12,6 +12,7 @@ import {
   storeAuth,
   clearAuth,
   getStoredToken,
+  TOKEN_REFRESHED_EVENT,
   type AuthResponse,
   type GuestAuthResponse,
   type MeResponse,
@@ -67,6 +68,24 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Sync React `token` state after a token refresh dispatched by the axios
+  // interceptor (or by the socket layer's token_expired refresh path). The
+  // interceptor writes the fresh token to localStorage and dispatches
+  // TOKEN_REFRESHED_EVENT; this listener reads it back into state so
+  // `useSocket`'s `token` dependency re-runs and reconnects with the new
+  // bearer. Without this, HTTP recovers transparently but the socket stays
+  // on the stale token and loops connect_error → logout. The interceptor
+  // handles token refresh for HTTP calls; this bridge propagates the result
+  // to the rest of the React tree.
+  useEffect(() => {
+    const onRefreshed = () => {
+      const fresh = getStoredToken();
+      setToken(fresh);
+    };
+    window.addEventListener(TOKEN_REFRESHED_EVENT, onRefreshed);
+    return () => window.removeEventListener(TOKEN_REFRESHED_EVENT, onRefreshed);
   }, []);
 
   const login = useCallback(async (identifier: string, password: string) => {
