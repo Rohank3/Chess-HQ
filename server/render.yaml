@@ -6,13 +6,11 @@
 #     backend.
 #
 # Apply with `render blueprint deploy` from the repo root (or connect the repo
-# in the Render dashboard and pick this file). The `preDeployCommand` below is
-# the crucial bit: it runs `npm run db:migrate` as a Release build before each
-# deploy, so schema changes are applied transactionally and out-of-band of the
-# running server process -- matching the "migrations are an explicit release
-# step, never run at boot" rule established in ARCHITECTURE.md Step 2. The DB
-# resource is provisioned first, so DATABASE_URL is already bound by the time
-# the preDeployCommand runs.
+# in the Render dashboard and pick this file). Migrations run at container
+# start: the start command prepends `npm run db:migrate` (idempotent +
+# transactional) because Render's free tier does not support pre-deploy
+# (release) commands. The DB resource is provisioned first, so DATABASE_URL is
+# already bound by the time the start command runs.
 #
 # Secrets (JWT_SECRET) are intentionally left as `sync: false` -- paste a real
 # `openssl rand -hex 32` value into the Render dashboard after the first apply.
@@ -38,14 +36,14 @@ services:
     # all resolve against the server workspace's own package.json + node_modules,
     # exactly mirroring the local `npm --prefix server run ...` convention used
     # throughout the README and ARCHITECTURE.md (e.g. Step 2's db:migrate line).
-    buildCommand: npm install --prefix server && npm run build --prefix server
-    startCommand: npm start --prefix server
-    # Release command: apply pending migrations before each deploy. The migrate
-    # runner wraps each *.sql file in its own transaction and records applied
-    # rows in `_migrations`, so this is idempotent -- a redeploy of unchanged
-    # schema is a no-op. Failed migrations roll back the single file's
-    # transaction and fail the deploy (never partially mutating the schema).
-    preDeployCommand: npm --prefix server run db:migrate
+    buildCommand: npm install --prefix server --include=dev && npm run build --prefix server
+    startCommand: npm --prefix server run db:migrate && npm start --prefix server
+    # Migrations run as part of the start command because Render's free tier
+    # does not support pre-deploy (release) commands. The migrate runner wraps
+    # each *.sql file in its own transaction and records applied rows in
+    # `_migrations`, so this is idempotent -- every cold start no-ops on
+    # unchanged schema. `--include=dev` keeps tsx (which runs the TS migrate
+    # script) installed even though Render builds with NODE_ENV=production.
     healthCheckPath: /api/health
     autoDeploy: true
     # Single instance is an explicit constraint, not an accident: the in-memory

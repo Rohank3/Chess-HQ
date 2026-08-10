@@ -99,22 +99,24 @@ npm --prefix server run db:migrate           # apply pending
 npm --prefix server run db:migrate:dry-run   # list pending without applying
 ```
 
-Migrations are **not** auto-applied at server boot. They run as an explicit deploy/release
-step (see [Deployment](#deployment)) so a flapping deploy can never lock migrations or partly
-mutate the schema.
+Migrations run as an explicit `npm run db:migrate` step, never from application code. On
+Render it is folded into the start command (`db:migrate && node dist/index.js`) because the
+free tier does not support pre-deploy/release commands. The runner is idempotent and
+transactional, so a flapping deploy can never lock migrations or partly mutate the schema.
 
 ## Deployment
 
 The app is a single-instance topology by design:
 
 - **Backend — Render.** `server/render.yaml` is a Render Blueprint that provisions a managed
-  Render Postgres database (`chess-db`) and a Node web service (`chess-server`). The web
-  service's `preDeployCommand: npm --prefix server run db:migrate` is the **release command**
-  that applies pending migrations before each deploy, out-of-band of the running server process.
-  `DATABASE_URL` is injected from the database resource; `JWT_SECRET` and `CLIENT_ORIGIN` are
-  `sync: false` secrets you paste into the Render dashboard. `TRUST_PROXY_HOPS=1` is set so
-  `req.ip` reads the real client through Render's one trusted proxy (which the per-IP rate
-  limiter keys on). The DB-aware `GET /api/health` is the service's health check.
+  Render Postgres database (`chess-db`) and a Node web service (`chess-server`). Migrations
+  run at container start (`db:migrate && node dist/index.js`) because the free tier does not
+  support pre-deploy/release commands; the runner is idempotent, so unchanged schema is a
+  no-op. `DATABASE_URL` is injected from the database resource; `JWT_SECRET` and
+  `CLIENT_ORIGIN` are `sync: false` secrets you paste into the Render dashboard.
+  `TRUST_PROXY_HOPS=1` is set so `req.ip` reads the real client through Render's one trusted
+  proxy (which the per-IP rate limiter keys on). The DB-aware `GET /api/health` is the
+  service's health check.
 - **Frontend — Netlify.** `client/netlify.toml` runs `npm run build`, publishes `dist/`, and
   rewrites `/*` to `/index.html` with status `200` so `createBrowserRouter` deep links resolve.
   Set `VITE_API_URL` / `VITE_SOCKET_URL` in the Netlify dashboard (from
