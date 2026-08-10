@@ -7,6 +7,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { Game } from './pages/Game';
+import { ChallengePage } from './pages/Challenge';
 import { NotFound } from './pages/NotFound';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './styles/theme.css';
@@ -19,6 +20,7 @@ const router = createBrowserRouter([
       { index: true, element: <Landing /> },
       { path: 'login', element: <Login /> },
       { path: 'register', element: <Register /> },
+      { path: 'challenge/:id', element: <ChallengePage /> },
       {
         element: <ProtectedRoute />,
         children: [

@@ -115,6 +115,30 @@ export interface RejoinedPayload {
   games: { gameId: string }[];
 }
 
+// Shareable custom-clock challenges.
+export interface ChallengeDetails {
+  id: string;
+  initialMs: number;
+  incrementMs: number;
+  creatorUserId: string;
+  creatorUsername: string;
+  creatorElo: number;
+  expiresAt: string;
+}
+
+export interface ChallengeAcceptedPayload {
+  gameId: string;
+  color: CommandColor;
+  opponent: PlayerSummary;
+  timeControl: string;
+  initialMs: number;
+  incrementMs: number;
+}
+
+export interface ChallengeJoinInput {
+  challengeId: string;
+}
+
 // snake_case command payloads emitted by the client.
 export interface QueueJoinInput {
   timeControl: string;

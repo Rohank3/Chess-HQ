@@ -120,8 +120,12 @@ authRouter.post(
 
 authRouter.get('/me', requireAuth, async (req, res, next) => {
   try {
+    // Guests are included: the auth bootstrap calls /me on every page load
+    // and clears the session on a 401, so excluding guests here logged them
+    // out on every refresh. The row carries is_guest, so the client can
+    // still tell the two apart.
     const result = await pool.query<{ username: string; elo: number; is_guest: boolean }>(
-      'SELECT username, elo, is_guest FROM users WHERE id = $1 AND is_guest = FALSE',
+      'SELECT username, elo, is_guest FROM users WHERE id = $1',
       [req.user!.id],
     );
     const user = result.rows[0];

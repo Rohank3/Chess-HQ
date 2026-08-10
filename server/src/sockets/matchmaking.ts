@@ -51,10 +51,10 @@ export function registerMatchmakingHandlers(io: Server, socket: Socket): void {
         return;
       }
 
-      if (profile.is_guest) {
-        ack?.({ ok: false, error: 'guest_restricted' });
-        return;
-      }
+      // Guests are allowed to queue: this app has no separate casual/ranked
+      // split, so "play as guest" is the primary quick path and blocking it
+      // left guests with no way to start a game. Guests start at 1200 Elo
+      // and their games count normally.
 
       const entry: QueueEntry = {
         userId: socket.data.userId,

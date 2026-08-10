@@ -8,6 +8,7 @@ import { logger } from './utils/logger.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { statsRouter } from './routes/stats.js';
+import { challengesRouter } from './routes/challenges.js';
 import { createSocketLayer } from './sockets/index.js';
 import { runMigrations } from './db/migrate.js';
 
@@ -78,6 +79,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/challenges', challengesRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'not_found' });
@@ -101,8 +103,11 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     isOperational,
     stack: isProduction && !isOperational ? undefined : error.stack,
   });
+  // In production, never leak internal error codes (e.g. Postgres
+  // '42P01') or raw messages to the client — only operational errors
+  // (4xx HttpErrors) carry safe public codes/messages.
   res.status(status).json({
-    error: error.code ?? 'internal_error',
+    error: isProduction && !isOperational ? 'internal_error' : (error.code ?? 'internal_error'),
     message: isProduction ? error.publicMessage : (error.publicMessage ?? error.message),
   });
 });

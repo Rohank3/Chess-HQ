@@ -8,10 +8,17 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { useMatchmaking, type UseMatchmakingResult } from '../game/useMatchmaking';
 import { useGame, type UseGameResult } from '../game/useGame';
-import type { CommandColor, MoveInput, PieceCounts } from '../game/types';
+import { useSocket } from '../hooks/useSocket';
+import type {
+  ChallengeAcceptedPayload,
+  CommandColor,
+  MoveInput,
+  PieceCounts,
+} from '../game/types';
 
 // ---------- Piece + promotion constants (kept here; small + stable) --------
 
@@ -44,6 +51,9 @@ interface GameContextValue {
   // the synchronous handler used by react-chessboard's onPieceDrop. Returns
   // true to accept and keep the piece on the target square, false to snap back.
   submitMove: (args: { piece: { pieceType: string }; sourceSquare: string; targetSquare: string | null }) => boolean;
+  // Legal targets for a square, off the authoritative mirror — used to
+  // highlight all valid moves when a piece is clicked.
+  legalMovesFrom: (square: string) => Array<{ to: string; isCapture: boolean }>;
   // utility consumers (CapturedPieces) can read directly off the snapshot; we
   // also expose the unicode glyph map and material weighting for reuse.
   unicodeGlyphs: typeof UNICODE_GLYPHS;
@@ -78,13 +88,27 @@ const GameContext = createContext<GameContextValue | null>(null);
 export function GameProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const matchmaking = useMatchmaking();
   const { queueState, match } = matchmaking;
+  const { socket } = useSocket();
+  const navigate = useNavigate();
 
-  // The active game identity. Set when `queue:matched` arrives OR when the
-  // host mounted this provider with a seeded `seedGameId` (later: rejoin path).
-  const [gameId, setGameId] = useState<string | null>(null);
-  const [myColor, setMyColor] = useState<CommandColor | null>(null);
+  // A challenge joiner arrives via /challenge/:id and navigates here with
+  // the accepted game seeded in location.state, so the provider mounts with
+  // the game already adopted (no dependency on an event that fired before
+  // mount).
+  const location = useLocation();
+  const seed = (location.state ?? null) as {
+    seedGameId?: string;
+    seedColor?: CommandColor;
+    seedOpponent?: { id: string; username: string; elo: number };
+  } | null;
+
+  // The active game identity. Set when `queue:matched` arrives, when
+  // `challenge:accepted` arrives (creator side), or seeded from
+  // location.state (challenge joiner side).
+  const [gameId, setGameId] = useState<string | null>(seed?.seedGameId ?? null);
+  const [myColor, setMyColor] = useState<CommandColor | null>(seed?.seedColor ?? null);
   const [opponent, setOpponent] = useState<{ id: string; username: string; elo: number } | null>(
-    null,
+    seed?.seedOpponent ?? null,
   );
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [optimisticFen, setOptimisticFen] = useState<string | null>(null);
@@ -98,7 +122,7 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
   const game = useGame({ gameId });
 
   // When the matchmaking layer transitions to 'matched', adopt the matched
-  // gameId + color + opponent. The page can then navigate to /game/<id>.
+  // gameId + color + opponent.
   useEffect(() => {
     if (queueState === 'matched' && match) {
       setGameId(match.gameId);
@@ -106,6 +130,31 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       setOpponent(match.opponent);
     }
   }, [queueState, match]);
+
+  // A challenge creator stays on /game while waiting; when an opponent
+  // accepts, the server emits `challenge:accepted` shaped like the matched
+  // payload. Adopt it the same way as a queue match.
+  useEffect(() => {
+    if (!socket) return;
+    const onAccepted = (payload: ChallengeAcceptedPayload) => {
+      setGameId(payload.gameId);
+      setMyColor(payload.color);
+      setOpponent(payload.opponent);
+    };
+    socket.on('challenge:accepted', onAccepted);
+    return () => {
+      socket.off('challenge:accepted', onAccepted);
+    };
+  }, [socket]);
+
+  // Once a game is adopted, mount its shareable URL. GameProvider only
+  // mounts on /game and /challenge, so this never fires spuriously; the
+  // /game -> /game/:id transition keeps the same component instance (no
+  // remount), and the /challenge -> /game/:id transition is the joiner's
+  // seed path (gameId already set at mount).
+  useEffect(() => {
+    if (gameId) navigate(`/game/${gameId}`, { replace: true });
+  }, [gameId, navigate]);
 
   // Re-sync the local chess mirror from the authoritative snapshot.
   useEffect(() => {
@@ -120,6 +169,22 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       setOptimisticFen(game.snapshot.fen);
     }
   }, [game.snapshot]);
+
+  // Legal targets off the authoritative mirror: used by the board's
+  // onPieceClick to light up every valid destination for the clicked piece.
+  const legalMovesFrom: GameContextValue['legalMovesFrom'] = useCallback((square) => {
+    const chess = authoritativeRef.current;
+    if (!chess) return [];
+    try {
+      // chess.js types `Square` as a literal union it doesn't export, so a
+      // string-literal assertion is the pragmatic bridge here.
+      return chess
+        .moves({ square: square as 'a1', verbose: true })
+        .map((m) => ({ to: m.to, isCapture: m.flags.includes('c') || m.flags.includes('e') }));
+    } catch {
+      return [];
+    }
+  }, []);
 
   const cancelPromotion = useCallback(() => setPendingPromotion(null), []);
 
@@ -230,6 +295,7 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       cancelPromotion,
       resolvePromotion,
       submitMove,
+      legalMovesFrom,
       unicodeGlyphs: UNICODE_GLYPHS,
     }),
     [
@@ -243,6 +309,7 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       cancelPromotion,
       resolvePromotion,
       submitMove,
+      legalMovesFrom,
     ],
   );
 

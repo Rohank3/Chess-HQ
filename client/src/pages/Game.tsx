@@ -1,12 +1,11 @@
-import { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { GameProvider, useGameContext } from '../context/GameContext';
 import { GameTimer } from '../components/GameTimer';
 import { CapturedPieces } from '../components/CapturedPieces';
 import { MoveListSidebar } from '../components/MoveListSidebar';
 import { PromotionDialog } from '../components/PromotionDialog';
-import { MatchmakingOverlay } from '../components/MatchmakingOverlay';
+import { MatchmakingHub } from '../components/MatchmakingHub';
 import { GameOverModal } from '../components/GameOverModal';
 import { useTimer } from '../game/useTimer';
 
@@ -14,24 +13,14 @@ const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const LAST_MOVE_HIGHLIGHT = 'var(--color-neon-500)';
 const LAST_MOVE_FROM_BG = 'rgba(6, 182, 212, 0.28)';
 const LAST_MOVE_TO_BG = 'rgba(6, 182, 212, 0.45)';
+const SELECTED_BG = 'rgba(34, 211, 238, 0.32)';
+const MOVE_TARGET_BG = 'rgba(16, 185, 129, 0.25)';
+const CAPTURE_TARGET_BG = 'rgba(244, 63, 94, 0.30)';
 
 function GameRoom(): React.JSX.Element {
-  const { optimisticFen, gameId, myColor, opponent, game, matchmaking, submitMove } =
+  const { optimisticFen, gameId, myColor, opponent, game, matchmaking, submitMove, legalMovesFrom } =
     useGameContext();
-  const navigate = useNavigate();
 
-  // When matched, mount the URL to /game/<id> so it's shareable/bookmarkable.
-  // We navigate rather than setParams because we may have entered /game with
-  // no :id (queue-then-match flow).
-  useEffect(() => {
-    if (matchmaking.queueState === 'matched' && matchmaking.match) {
-      navigate(`/game/${matchmaking.match.gameId}`, { replace: true });
-    }
-  }, [matchmaking.queueState, matchmaking.match, navigate]);
-
-  // The board renders the optimistic fen if we have one; the start FEN as a
-  // neutral placeholder otherwise (queue/searching). Once a snapshot arrives,
-  // the GameContext effect sets optimisticFen to the authoritative fen.
   const position = optimisticFen ?? START_FEN;
   const snapshot = game.snapshot;
   const isGameOver = !!game.gameOver || !!snapshot?.gameOver;
@@ -44,17 +33,59 @@ function GameRoom(): React.JSX.Element {
     isGameOver,
   });
 
-  // Square styles: highlight last move's from/to squares, and highlight the
-  // king square in accent-rose when in check (read off a local chess.js mirror
-  // of the snapshot fen for the in-check square).
+  // --- Legal-move highlighting ----------------------------------------------
+  // Clicking one of my pieces lights up every square it can legally move to
+  // (green tint for quiet moves, rose ring for captures).
+  const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+  const [legalTargets, setLegalTargets] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setSelectedSquare(null);
+    setLegalTargets({});
+  }, [snapshot]);
+
+  const handlePieceClick = useCallback(
+    ({ square }: { square: string | null }) => {
+      if (!square) return;
+      const myTurn = snapshot?.turn === myColor;
+      if (!snapshot || isGameOver || !myColor || !myTurn) {
+        setSelectedSquare(null);
+        setLegalTargets({});
+        return;
+      }
+      const moves = legalMovesFrom(square);
+      if (moves.length === 0) {
+        setSelectedSquare(null);
+        setLegalTargets({});
+        return;
+      }
+      setSelectedSquare(square);
+      const targets: Record<string, boolean> = {};
+      for (const m of moves) targets[m.to] = m.isCapture;
+      setLegalTargets(targets);
+    },
+    [snapshot, isGameOver, myColor, legalMovesFrom],
+  );
+
   const squareStyles = useMemo<Record<string, React.CSSProperties>>(() => {
     const out: Record<string, React.CSSProperties> = {};
     if (snapshot?.lastMove) {
       out[snapshot.lastMove.from] = { background: LAST_MOVE_FROM_BG };
       out[snapshot.lastMove.to] = { background: LAST_MOVE_TO_BG };
     }
+    if (selectedSquare) {
+      out[selectedSquare] = {
+        background: SELECTED_BG,
+        boxShadow: 'inset 0 0 0 2px var(--color-neon-500)',
+      };
+    }
+    for (const [square, isCapture] of Object.entries(legalTargets)) {
+      out[square] = isCapture
+        ? { background: CAPTURE_TARGET_BG, boxShadow: 'inset 0 0 0 2px var(--color-accent-rose)' }
+        : { background: MOVE_TARGET_BG };
+    }
     return out;
-  }, [snapshot]);
+  }, [snapshot, selectedSquare, legalTargets]);
 
   // v5 'arrows' prop draws the last-move arrow programmatically.
   const arrows = useMemo(
@@ -71,15 +102,19 @@ function GameRoom(): React.JSX.Element {
     [snapshot],
   );
 
-  // Player strips. Top = opponent, bottom = me. The board orientation is
-  // determined by myColor so my own pieces sit on the bottom.
   const orientation: 'white' | 'black' = myColor === 'b' ? 'black' : 'white';
   const isMyTurn = snapshot?.turn === myColor;
   const canDrag = !!(myColor && snapshot && !isGameOver && isMyTurn);
 
-  // Action buttons gate.
   const drawOffer = game.drawOffer;
   const myOwnOffer = drawOffer && myColor && drawOffer.offeredBy === myColor;
+
+  // No game yet (neither matched nor challenge-adopted): show the hub — the
+  // pre-game screen with standard time controls and challenge creation —
+  // instead of an empty board with no explanation.
+  if (!snapshot && !isGameOver && matchmaking.queueState !== 'matched' && !gameId) {
+    return <MatchmakingHub />;
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
@@ -121,6 +156,7 @@ function GameRoom(): React.JSX.Element {
                 id: 'game-room',
                 position,
                 onPieceDrop: submitMove,
+                onPieceClick: handlePieceClick,
                 boardOrientation: orientation,
                 allowDragging: canDrag,
                 allowDrawingArrows: !isGameOver,
@@ -144,7 +180,10 @@ function GameRoom(): React.JSX.Element {
             </div>
             {!isGameOver && snapshot && isMyTurn && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-500/30 bg-neon-500/10 px-2 py-0.5 text-[11px] font-medium text-neon-400">
-                <span className="size-1 rounded-full bg-neon-400 shadow-[0_0_6px_1px_var(--color-neon-400)]" aria-hidden />
+                <span
+                  className="size-1 rounded-full bg-neon-400 shadow-[0_0_6px_1px_var(--color-neon-400)]"
+                  aria-hidden
+                />
                 Your move
               </span>
             )}
@@ -213,20 +252,14 @@ function GameRoom(): React.JSX.Element {
       {/* Overlays */}
       <PromotionDialog />
       <GameOverModal />
-      {!snapshot && !isGameOver && <MatchmakingOverlay />}
     </main>
   );
 }
 
 /**
  * Wraps the room in the GameProvider so all child hooks share one context.
- *
- * No :id from params is required for the matchmaking flow (the user enters
- * via /game with no id, queues, and is navigated to /game/<gameId> on
- * `queue:matched`). A cold direct-URL hit to /game/<id> has no REST endpoint
- * to load the game from (the server only exposes an active-games list via the
- * `game:rejoined` socket event); we render the "Joining..." gate until the
- * first `game:state` lands. See ARCHITECTURE.md Step 9 for the gap.
+ * Game adoption (queue match or accepted challenge) sets the game identity in
+ * the provider; the provider navigates to /game/<id> once adopted.
  */
 export function Game(): React.JSX.Element {
   return (
