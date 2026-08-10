@@ -1,0 +1,57 @@
+# Keep the Render backend awake.
+#
+# Render's Free and Starter web services spin down after 15 minutes without
+# inbound traffic (HTTP requests or WebSocket messages). Pinging the health
+# endpoint every 10 minutes keeps the service under that window, so users
+# never hit the ~1 minute cold-start delay.
+#
+# Setup (one-time, ~2 minutes):
+#   1. Deploy the backend to Render and copy the service URL, e.g.
+#      https://chess-server-abc123.onrender.com
+#   2. In your GitHub repo: Settings -> Secrets and variables -> Actions ->
+#      New repository secret:
+#        Name:  RENDER_HEALTH_URL
+#        Value: https://chess-server-abc123.onrender.com/api/health
+#   3. Push this file to the default branch. The workflow starts firing on
+#      the next scheduled run (cron times are UTC).
+#
+# Notes:
+#   - The URL lives in a repository secret so the backend address is not
+#     hardcoded in the repo (it also lets you rename the service later
+#     without a commit).
+#   - GitHub pauses scheduled workflows on private repositories with no
+#     activity for 60 days. If that happens (or you want a no-code option),
+#     create a free UptimeRobot monitor for the same URL with a 5-minute
+#     interval instead.
+#   - Budget: ~432 runs/month. On a private repo that's ~430 of your 2,000
+#     free Actions minutes; on a public repo Actions is free.
+
+name: Keep Render awake
+
+on:
+  schedule:
+    # Every 10 minutes. Render's idle window is 15 minutes, so 10 gives a
+    # comfortable margin even when GitHub's cron queue is a few minutes late.
+    - cron: '*/10 * * * *'
+  # Lets you fire a ping manually from the Actions tab (useful for testing
+  # before the next scheduled run).
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping Render /api/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: GET health endpoint
+        run: |
+          curl -fsS \
+            --max-time 60 \
+            --retry 3 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            -o /dev/null \
+            -w "health check: HTTP %{http_code}\n" \
+            "${{ secrets.RENDER_HEALTH_URL }}"
+        # The retries absorb the ~1 minute cold start if Render ever does
+        # spin down despite the pings (e.g. after a GitHub cron pause).
