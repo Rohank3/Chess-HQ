@@ -90,91 +90,123 @@ const FEATURES: ReadonlyArray<Feature> = [
 const TIME_CONTROLS = ['Bullet', 'Blitz', 'Rapid', 'Classical'];
 
 /**
- * A large tilted 3D chessboard for the hero — pure CSS perspective, no
- * assets. The board lies back in space (rotateX), and each piece is
- * counter-rotated so it stands upright on its square facing the viewer.
- * The whole group floats gently.
+ * A large chessboard used as the hero backdrop — replaces the old blue
+ * glow. Tilted into perspective, heavily dimmed, and masked into a soft
+ * fade so it reads as atmosphere rather than a second focal point.
  */
-function HeroBoard(): React.JSX.Element {
+function BackgroundBoard(): React.JSX.Element {
   const cells = Array.from({ length: 64 }, (_, i) => {
     const r = Math.floor(i / 8);
     const c = i % 8;
     return { key: i, dark: (r + c) % 2 === 1 };
   });
 
-  // r=0 is rank 8 (far edge), r=7 is rank 1 (near edge).
-  const pieces: ReadonlyArray<{
-    glyph: string;
-    light: boolean;
-    r: number;
-    c: number;
-    size: number;
-  }> = [
-    { glyph: '♖', light: true, r: 7, c: 0, size: 44 },
-    { glyph: '♘', light: true, r: 7, c: 1, size: 44 },
-    { glyph: '♕', light: true, r: 7, c: 3, size: 48 },
-    { glyph: '♔', light: true, r: 7, c: 4, size: 48 },
-    { glyph: '♗', light: true, r: 7, c: 5, size: 44 },
-    { glyph: '♙', light: true, r: 6, c: 0, size: 40 },
-    { glyph: '♙', light: true, r: 6, c: 3, size: 40 },
-    { glyph: '♙', light: true, r: 6, c: 4, size: 40 },
-    { glyph: '♙', light: true, r: 6, c: 7, size: 40 },
-    { glyph: '♜', light: false, r: 0, c: 0, size: 44 },
-    { glyph: '♞', light: false, r: 0, c: 1, size: 44 },
-    { glyph: '♛', light: false, r: 0, c: 3, size: 48 },
-    { glyph: '♚', light: false, r: 0, c: 4, size: 48 },
-    { glyph: '♝', light: false, r: 0, c: 5, size: 44 },
-    { glyph: '♟', light: false, r: 1, c: 0, size: 40 },
-    { glyph: '♟', light: false, r: 1, c: 3, size: 40 },
-    { glyph: '♟', light: false, r: 1, c: 4, size: 40 },
-    { glyph: '♟', light: false, r: 1, c: 7, size: 40 },
-  ];
-
   return (
-    <div
-      className="relative mx-auto w-full max-w-[430px] select-none sm:max-w-[480px] lg:max-w-[540px]"
-      aria-hidden
-    >
-      {/* Warm light pool the board floats over */}
-      <div className="absolute inset-x-4 bottom-4 top-[45%] rounded-[50%] bg-neon-500/15 blur-3xl" />
+    <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden>
+      {/* Faint purplish wash (matches the cluster's mood, no blue) */}
+      <div className="absolute inset-0 bg-[radial-gradient(55rem_55rem_at_75%_10%,rgba(139,92,246,0.13),transparent_62%)]" />
 
-      <div className="relative animate-float" style={{ perspective: '1500px' }}>
+      {/* The board itself */}
+      <div
+        className="absolute right-[-22%] top-1/2 w-[min(1600px,160vw)] -translate-y-1/2"
+        style={{ perspective: '1500px' }}
+      >
         <div
           style={{
             transformStyle: 'preserve-3d',
-            transform: 'rotateX(57deg)',
+            transform: 'rotateX(62deg)',
+            opacity: 0.28,
+            WebkitMaskImage:
+              'radial-gradient(75% 75% at 62% 50%, black 32%, transparent 74%)',
+            maskImage:
+              'radial-gradient(75% 75% at 62% 50%, black 32%, transparent 74%)',
           }}
         >
-          <div className="grid grid-cols-8 overflow-hidden rounded-md border-4 border-slate-700/80 shadow-[0_50px_140px_-24px_rgba(34,211,238,0.3)]">
+          <div className="grid grid-cols-8 overflow-hidden rounded-lg border-4 border-slate-700/70">
             {cells.map((cell) => (
               <div
                 key={cell.key}
-                className={`aspect-square ${cell.dark ? 'bg-[#b58863]' : 'bg-[#f0d9b5]'}`}
+                className={`aspect-square ${cell.dark ? 'bg-[#8a654a]' : 'bg-[#d9c7a3]'}`}
               />
             ))}
           </div>
-
-          {pieces.map((p, i) => (
-            <span
-              key={`${p.glyph}-${i}`}
-              className="absolute"
-              style={{
-                left: `${p.c * 12.5 + 6.25}%`,
-                top: `${p.r * 12.5 + 1.5}%`,
-                transform: 'translate(-50%, -0.3em) rotateX(-57deg)',
-                fontSize: `${p.size}px`,
-                lineHeight: 1,
-                color: p.light ? '#f8fafc' : '#1e293b',
-                textShadow: p.light
-                  ? '0 0 1px #0f172a, 0 1px 1px #0f172a, 0 -1px 1px #0f172a, 0 10px 18px rgba(2,6,23,0.55)'
-                  : '0 0 1px #e2e8f0, 0 1px 1px #e2e8f0, 0 -1px 1px #e2e8f0, 0 10px 18px rgba(2,6,23,0.65)',
-              }}
-            >
-              {p.glyph}
-            </span>
-          ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface ClusterPiece {
+  glyph: string;
+  light: boolean;
+  left: string;
+  top: string;
+  size: number;
+  z: number;
+  /** 0 = standing; nonzero tips the piece over (lying down). */
+  rotate?: number;
+}
+
+/**
+ * Four large glossy chess pieces clustered in the foreground, inspired by
+ * a product-shot arrangement: king and queen standing behind, knight and a
+ * fallen pawn in front. Gloss via gradient-clipped text, depth via
+ * drop-shadows; soft blurred contact shadows ground each piece.
+ */
+function PieceCluster(): React.JSX.Element {
+  const pieces: ReadonlyArray<ClusterPiece> = [
+    { glyph: '♔', light: true, left: '14%', top: '2%', size: 152, z: 30 },
+    { glyph: '♛', light: false, left: '46%', top: '-2%', size: 140, z: 20 },
+    { glyph: '♘', light: true, left: '62%', top: '30%', size: 112, z: 40 },
+    { glyph: '♟', light: true, left: '36%', top: '58%', size: 88, z: 50, rotate: 76 },
+  ];
+
+  // Soft contact shadows, one per piece (roughly under its base).
+  const shadows: ReadonlyArray<{ left: string; top: string; w: number; h: number }> = [
+    { left: '20%', top: '66%', w: 110, h: 26 },
+    { left: '50%', top: '58%', w: 100, h: 24 },
+    { left: '66%', top: '82%', w: 84, h: 20 },
+    { left: '40%', top: '88%', w: 76, h: 18 },
+  ];
+
+  return (
+    <div className="relative mx-auto h-[340px] w-full max-w-[520px] select-none sm:h-[400px]" aria-hidden>
+      {shadows.map((s, i) => (
+        <div
+          key={`shadow-${i}`}
+          className="absolute rounded-[50%] bg-slate-950/80 blur-md"
+          style={{ left: s.left, top: s.top, width: s.w, height: s.h }}
+        />
+      ))}
+
+      {pieces.map((p, i) => (
+        <span
+          key={`${p.glyph}-${i}`}
+          className="absolute"
+          style={{
+            left: p.left,
+            top: p.top,
+            zIndex: p.z,
+            fontSize: `${p.size}px`,
+            lineHeight: 1,
+            transform: p.rotate ? `rotate(${p.rotate}deg)` : undefined,
+            transformOrigin: '50% 80%',
+            // Gradient-clipped body for the glossy ceramic look.
+            background: p.light
+              ? 'linear-gradient(180deg,#ffffff 0%,#e2e8f0 42%,#94a3b8 100%)'
+              : 'linear-gradient(180deg,#94a3b8 0%,#334155 52%,#020617 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
+            // Soft rim so black pieces stay defined on the dark backdrop.
+            WebkitTextStroke: p.light ? '1px #475569' : '1px #94a3b8',
+            filter:
+              'drop-shadow(0 16px 24px rgba(2,6,23,0.55)) drop-shadow(0 5px 8px rgba(2,6,23,0.4))',
+          }}
+        >
+          {p.glyph}
+        </span>
+      ))}
     </div>
   );
 }
@@ -201,22 +233,10 @@ export function Landing(): React.JSX.Element {
 
   return (
     <main className="relative isolate overflow-hidden">
-      {/* Ambient glows */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60rem_60rem_at_50%_-20%,rgba(34,211,238,0.14),transparent_60%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(45rem_45rem_at_85%_25%,rgba(139,92,246,0.12),transparent_60%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(40rem_40rem_at_110%_100%,rgba(34,211,238,0.08),transparent_65%)]"
-      />
+      <BackgroundBoard />
 
       {/* Hero */}
-      <section className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-16 px-6 pb-24 pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)] lg:gap-10 lg:pb-32 lg:pt-28">
+      <section className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 pb-24 pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,540px)] lg:gap-8 lg:pb-32 lg:pt-28">
         <div className="relative z-10 text-center lg:text-left">
           <p className="inline-flex items-center gap-2.5 rounded-full border border-slate-800 bg-slate-900/60 px-4 py-1.5 text-xs font-medium tracking-wide text-slate-300">
             <span
@@ -300,7 +320,7 @@ export function Landing(): React.JSX.Element {
           </div>
         </div>
 
-        <HeroBoard />
+        <PieceCluster />
       </section>
 
       {/* Features */}
