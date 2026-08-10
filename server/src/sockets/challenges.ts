@@ -123,7 +123,11 @@ export function registerChallengeHandlers(io: Server, socket: Socket): void {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('challenge_join_failed', { socketId: socket.id, message });
-      ack?.({ ok: false, error: 'internal_error', message: 'Internal error' });
+      // Surface the real cause to the accepting player: a failed accept is
+      // a debugging event, and the message (e.g. a Postgres constraint
+      // name) is not sensitive. This is what makes the next failure
+      // self-diagnosing in the UI instead of a dead-end 'Internal error'.
+      ack?.({ ok: false, error: 'internal_error', message });
     }
   });
 

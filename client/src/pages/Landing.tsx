@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { ChessPiece3D } from '../components/ChessPiece3D';
 
 interface SubmitError {
   code: string;
@@ -137,36 +138,38 @@ function BackgroundBoard(): React.JSX.Element {
 }
 
 interface ClusterPiece {
-  glyph: string;
+  type: 'king' | 'queen' | 'knight' | 'pawn';
   light: boolean;
   left: string;
   top: string;
-  size: number;
+  width: number;
   z: number;
   /** 0 = standing; nonzero tips the piece over (lying down). */
   rotate?: number;
 }
 
 /**
- * Four large glossy chess pieces clustered in the foreground, inspired by
- * a product-shot arrangement: king and queen standing behind, knight and a
- * fallen pawn in front. Gloss via gradient-clipped text, depth via
- * drop-shadows; soft blurred contact shadows ground each piece.
+ * Four large glossy 3D chess pieces clustered in the foreground, inspired
+ * by a product-shot arrangement: king and queen standing behind, knight
+ * and a fallen pawn in front. Soft blurred contact shadows ground each
+ * piece; the pieces themselves are shaded SVG (see ChessPiece3D).
  */
 function PieceCluster(): React.JSX.Element {
+  // Ground line: every standing piece's base sits on the same height.
+  const ground = 342; // px, relative to the sm:h-[400px] container
   const pieces: ReadonlyArray<ClusterPiece> = [
-    { glyph: '♔', light: true, left: '14%', top: '2%', size: 152, z: 30 },
-    { glyph: '♛', light: false, left: '46%', top: '-2%', size: 140, z: 20 },
-    { glyph: '♘', light: true, left: '62%', top: '30%', size: 112, z: 40 },
-    { glyph: '♟', light: true, left: '36%', top: '58%', size: 88, z: 50, rotate: 76 },
+    { type: 'queen', light: false, left: '44%', top: `${(ground - 116 * 1.2) / 4}%`, width: 116, z: 20 },
+    { type: 'king', light: true, left: '12%', top: `${(ground - 132 * 1.2) / 4}%`, width: 132, z: 30 },
+    { type: 'knight', light: true, left: '58%', top: `${(ground - 96 * 1.2) / 4}%`, width: 96, z: 40 },
+    { type: 'pawn', light: true, left: '38%', top: '68%', width: 72, z: 50, rotate: 76 },
   ];
 
   // Soft contact shadows, one per piece (roughly under its base).
   const shadows: ReadonlyArray<{ left: string; top: string; w: number; h: number }> = [
-    { left: '20%', top: '66%', w: 110, h: 26 },
-    { left: '50%', top: '58%', w: 100, h: 24 },
-    { left: '66%', top: '82%', w: 84, h: 20 },
-    { left: '40%', top: '88%', w: 76, h: 18 },
+    { left: '17%', top: '81%', w: 116, h: 24 },
+    { left: '49%', top: '81%', w: 104, h: 22 },
+    { left: '61%', top: '87%', w: 86, h: 20 },
+    { left: '36%', top: '91%', w: 68, h: 16 },
   ];
 
   return (
@@ -180,32 +183,20 @@ function PieceCluster(): React.JSX.Element {
       ))}
 
       {pieces.map((p, i) => (
-        <span
-          key={`${p.glyph}-${i}`}
+        <div
+          key={`${p.type}-${i}`}
           className="absolute"
           style={{
             left: p.left,
             top: p.top,
             zIndex: p.z,
-            fontSize: `${p.size}px`,
-            lineHeight: 1,
             transform: p.rotate ? `rotate(${p.rotate}deg)` : undefined,
-            transformOrigin: '50% 80%',
-            // Gradient-clipped body for the glossy ceramic look.
-            background: p.light
-              ? 'linear-gradient(180deg,#ffffff 0%,#e2e8f0 42%,#94a3b8 100%)'
-              : 'linear-gradient(180deg,#94a3b8 0%,#334155 52%,#020617 100%)',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent',
-            // Soft rim so black pieces stay defined on the dark backdrop.
-            WebkitTextStroke: p.light ? '1px #475569' : '1px #94a3b8',
-            filter:
-              'drop-shadow(0 16px 24px rgba(2,6,23,0.55)) drop-shadow(0 5px 8px rgba(2,6,23,0.4))',
+            transformOrigin: '50% 88%',
+            filter: 'drop-shadow(0 16px 26px rgba(2,6,23,0.5))',
           }}
         >
-          {p.glyph}
-        </span>
+          <ChessPiece3D type={p.type} light={p.light} width={p.width} />
+        </div>
       ))}
     </div>
   );

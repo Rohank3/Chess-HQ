@@ -103,6 +103,14 @@ export function useMatchmaking(): UseMatchmakingResult {
     async (input: QueueJoinInput) => {
       // If we already matched, no-op; the consumer should navigate to /game/<id>.
       if (queueState === 'matched') return;
+      // Don't hang on a silent queue forever: if the socket is gone (or
+      // never connected), the queued emit would never get an ack. Fail
+      // fast with a visible error instead of an infinite spinner.
+      if (!socket || (!socket.connected && !socket.active)) {
+        setQueueState('error');
+        setError('Not connected to the server — check your connection and try again.');
+        return;
+      }
       setQueueState('searching');
       setError(null);
       setJoinedAt(Date.now());
@@ -112,7 +120,8 @@ export function useMatchmaking(): UseMatchmakingResult {
       if (!ack.ok) {
         stopWidening();
         setJoinedAt(null);
-        setError(ack.error);
+        // Prefer the server's real message over the generic error code.
+        setError(ack.message ?? ack.error);
         setQueueState('error');
         return;
       }
