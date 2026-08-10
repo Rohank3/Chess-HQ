@@ -83,14 +83,12 @@ export function Landing(): React.JSX.Element {
               >
                 {guestBusy ? 'Starting…' : 'Play as Guest'}
               </button>
-              <button
-                type="button"
-                disabled
-                title="Coming in Step 9"
-                className="cursor-not-allowed rounded-lg border border-neon-600/30 bg-neon-600/5 px-6 py-3 text-sm font-semibold text-neon-500/40"
+              <Link
+                to="/game"
+                className="rounded-lg border border-neon-600/40 bg-neon-600/10 px-6 py-3 text-sm font-semibold text-neon-400 transition hover:border-neon-500 hover:bg-neon-600/20"
               >
-                Join Matchmaking Queue
-              </button>
+                Find a match
+              </Link>
             </>
           )}
         </div>
