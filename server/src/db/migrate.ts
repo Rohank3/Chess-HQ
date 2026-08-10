@@ -5,7 +5,13 @@ import { pool } from './pool.js';
 import { logger } from '../utils/logger.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = resolve(here, 'migrations');
+// Resolve from the server root so the runner works both from source (tsx:
+// <server>/src/db/migrate.ts) and from the compiled output (node:
+// <server>/dist/db/migrate.js). tsc never copies the *.sql files into dist/,
+// so a module-relative lookup would point at dist/db/migrations and crash
+// with ENOENT in production.
+const serverRoot = resolve(here, '..', '..');
+const migrationsDir = resolve(serverRoot, 'src/db/migrations');
 
 const ENSURE_TABLE = `
   CREATE TABLE IF NOT EXISTS _migrations (
