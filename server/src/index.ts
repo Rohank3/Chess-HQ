@@ -12,7 +12,42 @@ import { createSocketLayer } from './sockets/index.js';
 
 const app = express();
 
-app.use(helmet());
+// Render sits behind exactly one trusted proxy hop; on localhost there's no
+// proxy. Setting this from env lets `req.ip` resolve to the real client
+// address (out of X-Forwarded-For) so the per-IP rate-limit buckets aren't
+// all clumped on the proxy's single address. Must be set before any
+// middleware that reads `req.ip`.
+app.set('trust proxy', env.TRUST_PROXY_HOPS);
+
+// Helmet with an explicit, tightened CSP rather than the defaults. The
+// client is a Vite production bundle (hashed, same-origin external script)
+// so scriptSrc is locked to 'self' with no 'unsafe-inline'/'unsafe-eval'.
+// styleSrc allows 'unsafe-inline' because Tailwind v4 injects a runtime
+// <style> block in dev and an inlined critical-CSS block in the prod build
+// (Tailwind v4 doesn't emit linkable stylesheets for utilities). No inline
+// scripts exist in index.html (verified), so no script exception is
+// needed. frameAncestors/objectSrc/baseUri are locked hard.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'],
+        // connectSrc allows the browser to fetch/ws to same origin (the
+        // API) plus the configured CLIENT_ORIGIN (the browser's own origin
+        // for cross-origin fetch+ws in prod where API and client split
+        // hosts). http:/https:/ws:/wss: protocols are listed so the
+        // directive holds in dev (http/ws) and prod (https/wss).
+        connectSrc: ["'self'", env.CLIENT_ORIGIN, 'http:', 'https:', 'ws:', 'wss:'],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+      },
+    },
+  }),
+);
 app.use(
   cors({
     origin: env.CLIENT_ORIGIN,
@@ -23,8 +58,19 @@ app.use(
 );
 app.use(express.json({ limit: '64kb' }));
 
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  req.id = crypto.randomUUID();
+app.use((req: Request, res: Response, next: NextFunction) => {
+  // Honor an inbound X-Request-Id if present and well-formed (so a proxy or
+  // upstream can propagate a trace id); otherwise mint a fresh UUID. The
+  // identifier is mirrored into the response's X-Request-Id header so a
+  // client reporting an incident gives us a correlatable id without having
+  // to grep by timestamp.
+  const inbound = req.headers['x-request-id'];
+  const id =
+    typeof inbound === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(inbound)
+      ? inbound
+      : crypto.randomUUID();
+  req.id = id;
+  res.setHeader('X-Request-Id', id);
   next();
 });
 

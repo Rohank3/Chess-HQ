@@ -15,6 +15,8 @@ export function configureTestEnv(): void {
     RATE_LIMIT_MAX: '60',
     LOG_LEVEL: 'warn',
     DRAW_OFFER_TTL_MS: '30000',
+    MAX_ILLEGAL_MOVES: '5',
+    TRUST_PROXY_HOPS: '0',
   };
 
   for (const [key, value] of Object.entries(testDefaults)) {

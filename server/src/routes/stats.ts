@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db/pool.js';
 import { requireAuth } from '../middleware/authHttp.js';
+import { statsQuerySchema } from '../security/validation.js';
 import { badRequest } from '../utils/http-error.js';
 
 export const statsRouter = Router();
@@ -37,15 +38,15 @@ statsRouter.get('/me', requireAuth, async (req, res, next) => {
     const profile = profileResult.rows[0];
     if (!profile) return res.json({ profile: null, recentGames: [] });
 
-    // Pagination: ?limit=20&offset=0. Clamp limit to [1, 50] so a caller
-    // can't pull the entire games table in one request.
-    const rawLimit = Number(req.query.limit ?? 20);
-    const rawOffset = Number(req.query.offset ?? 0);
-    if (!Number.isFinite(rawLimit) || !Number.isFinite(rawOffset)) {
-      return next(badRequest('validation_error', 'limit and offset must be numbers'));
+    // Pagination: ?limit=20&offset=0. The zod schema clamps limit to
+    // [1, 50] (so a caller can't pull the entire games table in one request)
+    // and coerces offset to a non-negative int. A non-numeric input returns a
+    // clean validation_error via safeParse rather than a NaN fallthrough.
+    const parsed = statsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return next(badRequest('validation_error', parsed.error.issues[0]?.message));
     }
-    const limit = Math.min(50, Math.max(1, Math.floor(rawLimit)));
-    const offset = Math.max(0, Math.floor(rawOffset));
+    const { limit, offset } = parsed.data;
 
     // For each recent game we want to know:
     //   - gameId, ended_at, termination, time_control

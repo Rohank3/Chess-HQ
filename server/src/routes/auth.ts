@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { randomFillSync } from 'node:crypto';
 import { pool } from '../db/pool.js';
 import { hashPassword, verifyPassword } from '../security/argon.js';
-import { signToken } from '../security/jwt.js';
+import { signToken, refreshToken } from '../security/jwt.js';
 import { registerSchema, loginSchema } from '../security/validation.js';
 import { requireAuth } from '../middleware/authHttp.js';
 import { rateLimit } from '../security/rate-limit.js';
@@ -131,6 +131,48 @@ authRouter.get('/me', requireAuth, async (req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * POST /api/auth/refresh
+ *
+ * Re-sign a *still-valid* access token into a fresh one with the default
+ * access TTL. The client's current bearer is verified by `requireAuth`
+ * (so an *expired* token never reaches this handler -- it 401s at the
+ * middleware, which is the intended "you can refresh an active session but
+ * not resurrect a dead one" boundary). We re-verify inside refreshToken too
+ * for defence-in-depth, then re-sign the same identity.
+ *
+ * The fresh `elo` is read from the DB so the refreshed client reflects any
+ * rating change since the original token was minted (the JWT carries name
+ * but not elo). If the underlying account is gone (e.g. a guest row pruned
+ * between mint and refresh), the request 401s -- no token is minted for a
+ * phantom identity.
+ */
+authRouter.post(
+  '/refresh',
+  rateLimit({ scope: 'refresh', max: 10, windowMs: 60_000 }),
+  requireAuth,
+  async (req, res, next) => {
+    try {
+      const header = req.headers.authorization;
+      const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+      if (!token) return next(unauthorized('missing_token', 'Authorization header is required'));
+
+      const fresh = refreshToken(token);
+
+      const result = await pool.query<{ username: string; elo: number; is_guest: boolean }>(
+        'SELECT username, elo, is_guest FROM users WHERE id = $1',
+        [req.user!.id],
+      );
+      const user = result.rows[0];
+      if (!user) return next(unauthorized('invalid_token', 'User no longer exists'));
+
+      res.json({ token: fresh, user: publicUser({ id: req.user!.id, ...user }) });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // --- Guest flow ---------------------------------------------------------------
 // A "play as guest" session is a use-and-discard account: a random username,

@@ -40,3 +40,15 @@ nodeTest('jwt: signToken uses the configured HS256 algorithm', () => {
   };
   assert.equal(decoded.header.alg, 'HS256');
 });
+
+nodeTest('jwt: verifyToken rejects an expired token', () => {
+  // A token signed with a negative TTL is already expired at issue time.
+  // verifyToken must throw so the refresh boundary ("can't refresh an expired
+  // token") holds -- this is the test for the property refreshToken relies on.
+  const expired = jwt.sign(
+    { sub: 'user-3', name: 'x', guest: false },
+    env.JWT_SECRET,
+    { algorithm: 'HS256', expiresIn: '-1s' },
+  );
+  assert.throws(() => verifyToken(expired), /expired|jwt expired/i);
+});
