@@ -21,7 +21,7 @@
 databases:
   - name: chess-db
     databaseName: chess
-    plan: starter
+    plan: free
     # Render supports `postgreSQL` as the managed engine; the bench's
     # 001_init.sql runs `CREATE EXTENSION IF NOT EXISTS pgcrypto` itself, so no
     # extra extension wiring is needed here.
@@ -30,7 +30,7 @@ services:
   - type: web
     name: chess-server
     runtime: node
-    plan: starter
+    plan: free
     # Render's service root is the repo root. The repo is deliberately laid out
     # as a script-only root package.json + per-workspace package.json files,
     # with NO npm-workspace hoisting (Step 1 rationale). Render therefore runs
