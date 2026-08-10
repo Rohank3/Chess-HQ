@@ -1,0 +1,31 @@
+# Netlify build + SPA config for the Chess-HQ frontend.
+#
+# The build is plain `vite build` (client/package.json#build = `tsc -b && vite build`)
+# and writes to `dist/` (Vite default -- vite.config.ts does not override outDir),
+# so `publish = "dist"`.
+#
+# The SPA uses `createBrowserRouter` (clean URLs, no hash), so deep links like
+# /dashboard and /game/:id must fall back to index.html -- the `/*` redirect below
+# is a rewrite (status 200), not an external redirect, so the browser keeps the
+# URL and React Router routes on the client.
+#
+# VITE_API_URL / VITE_SOCKET_URL are deliberately NOT set here. They are build-time
+# values that get baked into the bundle, and the real Render backend URL varies
+# per deploy (and is a secret-ish free-tier URL). Set them in the Netlify dashboard
+# (Site settings > Environment variables) using client/.env.production.example as
+# the template -- hard-coding a placeholder in this file would ship a broken bundle
+# pointing at a nonexistent host.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback: every path resolves to index.html with a 200 (internal rewrite),
+# so the browser keeps the deep link and react-router routes it on the client.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
