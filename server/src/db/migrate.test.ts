@@ -6,6 +6,18 @@ import { dirname, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationPath = resolve(here, 'migrations/001_init.sql');
+const nullableTerminationPath = resolve(here, 'migrations/002_games_termination_nullable.sql');
+
+nodeTest(
+  '002 makes games.termination nullable so active-game INSERTs succeed',
+  async (_t: TestContext) => {
+    const sql = readFileSync(nullableTerminationPath, 'utf8');
+    assert.ok(
+      sql.includes('ALTER TABLE games ALTER COLUMN termination DROP NOT NULL'),
+      '002 must drop the NOT NULL on games.termination (createGame inserts active games without it)',
+    );
+  },
+);
 
 nodeTest(
   'the SQL DDL in 001_init.sql contains all required invariants',

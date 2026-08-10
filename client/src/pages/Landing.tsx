@@ -155,25 +155,28 @@ interface ClusterPiece {
  * piece; the pieces themselves are shaded SVG (see ChessPiece3D).
  */
 function PieceCluster(): React.JSX.Element {
-  // Ground line: every standing piece's base sits on the same height.
-  const ground = 342; // px, relative to the sm:h-[400px] container
+  // Ground line: every standing piece's base sits at ~88% of the container
+  // height (CSS calc keeps this correct at every breakpoint).
   const pieces: ReadonlyArray<ClusterPiece> = [
-    { type: 'queen', light: false, left: '44%', top: `${(ground - 116 * 1.2) / 4}%`, width: 116, z: 20 },
-    { type: 'king', light: true, left: '12%', top: `${(ground - 132 * 1.2) / 4}%`, width: 132, z: 30 },
-    { type: 'knight', light: true, left: '58%', top: `${(ground - 96 * 1.2) / 4}%`, width: 96, z: 40 },
-    { type: 'pawn', light: true, left: '38%', top: '68%', width: 72, z: 50, rotate: 76 },
+    { type: 'queen', light: false, left: '44%', top: 'calc(88% - 190px)', width: 158, z: 20 },
+    { type: 'king', light: true, left: '10%', top: 'calc(88% - 216px)', width: 180, z: 30 },
+    { type: 'knight', light: true, left: '58%', top: 'calc(88% - 154px)', width: 128, z: 40 },
+    { type: 'pawn', light: true, left: '38%', top: '70%', width: 96, z: 50, rotate: 76 },
   ];
 
   // Soft contact shadows, one per piece (roughly under its base).
   const shadows: ReadonlyArray<{ left: string; top: string; w: number; h: number }> = [
-    { left: '17%', top: '81%', w: 116, h: 24 },
-    { left: '49%', top: '81%', w: 104, h: 22 },
-    { left: '61%', top: '87%', w: 86, h: 20 },
-    { left: '36%', top: '91%', w: 68, h: 16 },
+    { left: '16%', top: '86%', w: 148, h: 28 },
+    { left: '49%', top: '86%', w: 132, h: 26 },
+    { left: '61%', top: '90%', w: 104, h: 22 },
+    { left: '36%', top: '93%', w: 84, h: 18 },
   ];
 
   return (
-    <div className="relative mx-auto h-[340px] w-full max-w-[520px] select-none sm:h-[400px]" aria-hidden>
+    <div
+      className="relative mx-auto h-[440px] w-full max-w-[560px] select-none sm:h-[520px]"
+      aria-hidden
+    >
       {shadows.map((s, i) => (
         <div
           key={`shadow-${i}`}
@@ -185,17 +188,24 @@ function PieceCluster(): React.JSX.Element {
       {pieces.map((p, i) => (
         <div
           key={`${p.type}-${i}`}
-          className="absolute"
+          className="absolute animate-float"
           style={{
             left: p.left,
             top: p.top,
             zIndex: p.z,
-            transform: p.rotate ? `rotate(${p.rotate}deg)` : undefined,
-            transformOrigin: '50% 88%',
-            filter: 'drop-shadow(0 16px 26px rgba(2,6,23,0.5))',
+            // Stagger the bob so the cluster feels alive, not mechanical.
+            animationDelay: `${i * 0.7}s`,
           }}
         >
-          <ChessPiece3D type={p.type} light={p.light} width={p.width} />
+          <div
+            style={{
+              transform: p.rotate ? `rotate(${p.rotate}deg)` : undefined,
+              transformOrigin: '50% 88%',
+              filter: 'drop-shadow(0 18px 28px rgba(2,6,23,0.5))',
+            }}
+          >
+            <ChessPiece3D type={p.type} light={p.light} width={p.width} />
+          </div>
         </div>
       ))}
     </div>

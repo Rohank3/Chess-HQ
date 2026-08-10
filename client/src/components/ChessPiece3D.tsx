@@ -32,9 +32,12 @@ export function ChessPiece3D({
   const gloss = `gloss-${uid}`;
   const base = `base-${uid}`;
 
-  const top = light ? '#ffffff' : '#a3b3c8';
-  const mid = light ? '#e2e8f0' : '#3b4a5f';
-  const dark = light ? '#8fa3b8' : '#04070d';
+  const top = light ? '#ffffff' : '#b6c4d6';
+  const high = light ? '#f1f5f9' : '#5b6b80';
+  const mid = light ? '#c7d4e0' : '#31404f';
+  const dark = light ? '#7e92a6' : '#04070d';
+  // Ambient-occlusion shadow color (darker version of the body).
+  const ao = light ? 'rgba(15,23,42,0.22)' : 'rgba(2,6,23,0.5)';
 
   const shared: CSSProperties = {
     width,
@@ -47,7 +50,8 @@ export function ChessPiece3D({
     <defs>
       <linearGradient id={body} x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stopColor={top} />
-        <stop offset="0.55" stopColor={mid} />
+        <stop offset="0.28" stopColor={high} />
+        <stop offset="0.62" stopColor={mid} />
         <stop offset="1" stopColor={dark} />
       </linearGradient>
       <radialGradient id={gloss} cx="0.32" cy="0.22" r="0.55">
@@ -83,6 +87,9 @@ export function ChessPiece3D({
           <ellipse cx="50" cy="88" rx="12" ry="4" fill={`url(#${body})`} />
           <ellipse cx="50" cy="70" rx="19" ry="20" fill={`url(#${body})`} />
           <circle cx="50" cy="45" r="13" fill={`url(#${body})`} />
+          {/* AO where head and body meet, and where body meets the collar */}
+          <ellipse cx="50" cy="58" rx="10" ry="3.5" fill={ao} />
+          <ellipse cx="50" cy="87" rx="12" ry="3" fill={ao} opacity="0.7" />
           <ellipse cx="45" cy="40" rx="5" ry="8" fill={`url(#${gloss})`} />
           <ellipse cx="44" cy="65" rx="6" ry="11" fill={`url(#${gloss})`} opacity="0.5" />
         </g>
@@ -98,6 +105,8 @@ export function ChessPiece3D({
           <circle cx="50" cy="44" r="15" fill={`url(#${body})`} />
           <rect x="46.5" y="18" width="7" height="19" rx="2" fill={`url(#${body})`} />
           <rect x="39" y="25" width="22" height="7" rx="2" fill={`url(#${body})`} />
+          <ellipse cx="50" cy="60" rx="12" ry="4" fill={ao} />
+          <ellipse cx="50" cy="90" rx="14" ry="3" fill={ao} opacity="0.7" />
           <ellipse cx="44" cy="38" rx="6" ry="10" fill={`url(#${gloss})`} />
           <ellipse cx="44" cy="70" rx="7" ry="14" fill={`url(#${gloss})`} opacity="0.5" />
         </g>
@@ -115,6 +124,8 @@ export function ChessPiece3D({
           <circle cx="38" cy="20" r="2.6" fill={`url(#${body})`} />
           <circle cx="50" cy="16" r="2.6" fill={`url(#${body})`} />
           <circle cx="62" cy="20" r="2.6" fill={`url(#${body})`} />
+          <ellipse cx="50" cy="57" rx="11" ry="3.5" fill={ao} />
+          <ellipse cx="50" cy="90" rx="13" ry="3" fill={ao} opacity="0.7" />
           <ellipse cx="45" cy="37" rx="5" ry="9" fill={`url(#${gloss})`} />
           <ellipse cx="44" cy="68" rx="6" ry="12" fill={`url(#${gloss})`} opacity="0.5" />
         </g>
@@ -131,6 +142,7 @@ export function ChessPiece3D({
             fill={`url(#${body})`}
           />
           <path d="M41 62 L35 46 L49 58 Z" fill={`url(#${body})`} />
+          <ellipse cx="50" cy="92" rx="12" ry="3" fill={ao} opacity="0.7" />
           <ellipse cx="45" cy="82" rx="8" ry="10" fill={`url(#${gloss})`} opacity="0.5" />
           <ellipse cx="36" cy="74" rx="4" ry="7" fill={`url(#${gloss})`} opacity="0.7" />
         </g>

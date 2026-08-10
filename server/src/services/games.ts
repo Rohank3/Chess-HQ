@@ -30,7 +30,8 @@ export interface GameRow {
   whiteEloAfter: number | null;
   blackEloAfter: number | null;
   winner: string | null;
-  termination: string;
+  /** NULL while the game is active; set together with endedAt at game-over. */
+  termination: string | null;
   moves: string[];
   pgn: string | null;
   fen: string;
@@ -57,7 +58,7 @@ interface RawGameRow {
   white_elo_after: number | null;
   black_elo_after: number | null;
   winner: string | null;
-  termination: string;
+  termination: string | null;
   moves: string[];
   pgn: string | null;
   fen: string;
