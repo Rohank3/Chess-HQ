@@ -1,8 +1,10 @@
 # Netlify build + SPA config for the Chess-HQ frontend.
 #
-# The build is plain `vite build` (client/package.json#build = `tsc -b && vite build`)
-# and writes to `dist/` (Vite default -- vite.config.ts does not override outDir),
-# so `publish = "dist"`.
+# Netlify reads netlify.toml from the repository root (the client/ copy was
+# never auto-detected). `base = "client"` anchors the build to the client
+# workspace: dependencies install there and the build command runs with cwd =
+# client/, so `npm run build` resolves client/package.json#build
+# (`tsc -b && vite build`) and `publish = "dist"` means client/dist.
 #
 # The SPA uses `createBrowserRouter` (clean URLs, no hash), so deep links like
 # /dashboard and /game/:id must fall back to index.html -- the `/*` redirect below
@@ -17,6 +19,7 @@
 # pointing at a nonexistent host.
 
 [build]
+  base = "client"
   command = "npm run build"
   publish = "dist"
 

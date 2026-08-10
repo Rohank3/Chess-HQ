@@ -19,11 +19,11 @@ that renders state pushed over Socket.IO and optimistically reconciles its own m
 ```
 .
 ├─ client/                 React + Vite frontend
-│  ├─ netlify.toml         build command, publish dir, SPA redirect
 │  └─ src/
 ├─ server/                 Express + Socket.IO backend
 │  ├─ src/db/migrations/   forward-only SQL migrations applied via `npm run db:migrate`
 │  └─ src/
+├─ netlify.toml            Netlify build settings + SPA redirect (base = client)
 ├─ render.yaml             Render Blueprint (web service + Postgres, at repo root)
 └─ package.json            script-only root (no workspace hoisting)
 ```
@@ -117,8 +117,9 @@ The app is a single-instance topology by design:
   `TRUST_PROXY_HOPS=1` is set so `req.ip` reads the real client through Render's one trusted
   proxy (which the per-IP rate limiter keys on). The DB-aware `GET /api/health` is the
   service's health check.
-- **Frontend — Netlify.** `client/netlify.toml` runs `npm run build`, publishes `dist/`, and
-  rewrites `/*` to `/index.html` with status `200` so `createBrowserRouter` deep links resolve.
+- **Frontend — Netlify.** `netlify.toml` (repo root, `base = "client"`) runs `npm run build`,
+  publishes `client/dist/`, and rewrites `/*` to `/index.html` with status `200` so
+  `createBrowserRouter` deep links resolve.
   Set `VITE_API_URL` / `VITE_SOCKET_URL` in the Netlify dashboard (from
   `client/.env.production.example`) to the Render backend's HTTPS origin — they're build-time
   values baked into the bundle.
