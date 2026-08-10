@@ -9,6 +9,7 @@ import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { statsRouter } from './routes/stats.js';
 import { createSocketLayer } from './sockets/index.js';
+import { runMigrations } from './db/migrate.js';
 
 const app = express();
 
@@ -121,6 +122,14 @@ const io = new Server(httpServer, {
 });
 
 createSocketLayer(io);
+
+// Apply migrations before listening. The Render start command already
+// prepends db:migrate, but a recycled/empty database (Render can
+// re-provision the free Postgres) would otherwise leave the app serving 500s
+// ("relation users does not exist") until the next redeploy. Running the
+// idempotent runner here makes every boot self-healing; a failure crashes
+// the process so Render surfaces it instead of serving errors.
+await runMigrations();
 
 httpServer.listen(env.PORT, () => {
   logger.info('server_listening', { port: env.PORT, env: env.NODE_ENV });
