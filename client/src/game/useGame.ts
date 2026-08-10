@@ -62,6 +62,14 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
   useEffect(() => {
     if (!gameId || !socket) return;
 
+    // Ask the server for the current state. game:state is otherwise only
+    // broadcast on a move/game-over, so a freshly adopted game (match or
+    // challenge) would sit on a blank board with zeroed clocks forever
+    // without this. Re-subscribing on every 'connect' covers reconnects.
+    const subscribe = () => {
+      socket.emit('game:subscribe', { gameId });
+    };
+
     const onState = (snap: GameSnapshot) => {
       if (snap.gameId !== gameId) return;
       setSnapshot(snap);
@@ -99,12 +107,16 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
     socket.on('game:over', onOver);
     socket.on('game:draw:offered', onDrawOffered);
     socket.on('game:draw:declined', onDrawDeclined);
+    socket.on('connect', subscribe);
+
+    subscribe();
 
     return () => {
       socket.off('game:state', onState);
       socket.off('game:over', onOver);
       socket.off('game:draw:offered', onDrawOffered);
       socket.off('game:draw:declined', onDrawDeclined);
+      socket.off('connect', subscribe);
     };
   }, [gameId, socket]);
 

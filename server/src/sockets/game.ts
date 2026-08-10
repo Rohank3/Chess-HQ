@@ -112,6 +112,43 @@ interface CapturedDelta {
 }
 
 export function registerGameHandlers(io: Server, socket: Socket): void {
+  // The initial-state fetch. `game:state` is otherwise only broadcast on a
+  // move or at game-over, so a freshly matched game (or a reconnecting
+  // socket) would never learn the current position/clocks without this.
+  // Joining the room here also covers reconnects (a new socket id arrives
+  // without room membership from the original handshake).
+  socket.on('game:subscribe', async (raw, ack) => {
+    try {
+      const parsed = gameActionSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.({
+          ok: false,
+          error: 'validation_error',
+          message: parsed.error.issues[0]?.message,
+        });
+        return;
+      }
+      const { gameId } = parsed.data;
+      const userId = socket.data.userId as string;
+
+      const game = await getGame(gameId);
+      if (colorOf(userId, game) === null) {
+        ack?.({ ok: false, error: 'forbidden', message: 'Not a player in this game' });
+        return;
+      }
+
+      socket.join(roomForGame(gameId));
+      const chess = await gameState.loadOrRehydrate(gameId);
+      const isOver = game.endedAt !== null;
+      socket.emit('game:state', snapshot(chess, game, null, isOver));
+      ack?.({ ok: true, status: 'subscribed', gameId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      logger.error('game_subscribe_failed', { sid: socket.id, message });
+      ack?.({ ok: false, error: 'internal_error', message: safeErrorMessage(err) });
+    }
+  });
+
   socket.on('game:move', async (raw, ack) => {
     try {
       const parsed = moveSchema.safeParse(raw);

@@ -3,6 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ChessPiece3D } from '../components/ChessPiece3D';
+import { PieceScene } from '../components/PieceScene';
+
+// WebGL gate: the hero's 3D piece scene needs a GL context; ancient or
+// headless environments fall back to the flat SVG cluster.
+const supportsWebGL = typeof WebGLRenderingContext !== 'undefined';
 
 interface SubmitError {
   code: string;
@@ -321,7 +326,7 @@ export function Landing(): React.JSX.Element {
           </div>
         </div>
 
-        <PieceCluster />
+        {supportsWebGL ? <PieceScene /> : <PieceCluster />}
       </section>
 
       {/* Features */}
