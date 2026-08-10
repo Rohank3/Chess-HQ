@@ -22,9 +22,9 @@ that renders state pushed over Socket.IO and optimistically reconciles its own m
 │  ├─ netlify.toml         build command, publish dir, SPA redirect
 │  └─ src/
 ├─ server/                 Express + Socket.IO backend
-│  ├─ render.yaml          Render Blueprint (web service + Postgres, release command)
 │  ├─ src/db/migrations/   forward-only SQL migrations applied via `npm run db:migrate`
 │  └─ src/
+├─ render.yaml             Render Blueprint (web service + Postgres, at repo root)
 └─ package.json            script-only root (no workspace hoisting)
 ```
 
@@ -108,7 +108,7 @@ transactional, so a flapping deploy can never lock migrations or partly mutate t
 
 The app is a single-instance topology by design:
 
-- **Backend — Render.** `server/render.yaml` is a Render Blueprint that provisions a managed
+- **Backend — Render.** `render.yaml` (repo root) is a Render Blueprint that provisions a managed
   Render Postgres database (`chess-db`) and a Node web service (`chess-server`). Migrations
   run at container start (`db:migrate && node dist/index.js`) because the free tier does not
   support pre-deploy/release commands; the runner is idempotent, so unchanged schema is a
