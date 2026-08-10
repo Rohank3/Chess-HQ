@@ -1,5 +1,8 @@
 import type { Server, Socket } from 'socket.io';
-import { TokenExpiredError } from 'jsonwebtoken';
+// Named imports from the CJS jsonwebtoken module break under Node's ESM
+// loader ("does not provide an export named 'TokenExpiredError'") once
+// compiled to dist/; use the default import like security/jwt.ts does.
+import jwt from 'jsonwebtoken';
 import { verifyToken } from '../security/jwt.js';
 import { logger } from '../utils/logger.js';
 
@@ -24,7 +27,7 @@ export function attachSocketAuth(io: Server): void {
       // future jsonwebtoken refactor could rephrase that message). The
       // client's useSocket handler matches these reason verbs verbatim, so
       // keeping them stable is part of the contract.
-      const reason = err instanceof TokenExpiredError ? 'token_expired' : 'invalid_token';
+      const reason = err instanceof jwt.TokenExpiredError ? 'token_expired' : 'invalid_token';
       logger.warn('socket_unauthorized', { reason, sid: socket.id });
       return next(new Error(reason));
     }
