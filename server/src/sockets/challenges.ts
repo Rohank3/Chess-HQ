@@ -1,6 +1,6 @@
 import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
-import { getChallenge, removeChallenge } from '../services/challenges.js';
+import { getChallenge, removeChallenge, restoreChallenge } from '../services/challenges.js';
 import { createGame } from '../services/games.js';
 import { gameState } from '../services/game-state.js';
 import { pool } from '../db/pool.js';
@@ -60,18 +60,27 @@ export function registerChallengeHandlers(io: Server, socket: Socket): void {
       }
 
       // Claim the challenge before creating the game so a second acceptor
-      // cannot race the same lobby.
+      // cannot race the same lobby. If creating the game fails, put the
+      // challenge back so the link survives a failed attempt instead of
+      // silently dying (the old order made every failed accept burn the
+      // challenge, so retries always reported 'expired').
       removeChallenge(challenge.id);
 
-      const game = await createGame({
-        whiteUserId: creator.id,
-        blackUserId: joiner.id,
-        whiteEloBefore: creator.elo,
-        blackEloBefore: joiner.elo,
-        timeControl: 'custom',
-        initialMs: challenge.initialMs,
-        incrementMs: challenge.incrementMs,
-      });
+      let game;
+      try {
+        game = await createGame({
+          whiteUserId: creator.id,
+          blackUserId: joiner.id,
+          whiteEloBefore: creator.elo,
+          blackEloBefore: joiner.elo,
+          timeControl: 'custom',
+          initialMs: challenge.initialMs,
+          incrementMs: challenge.incrementMs,
+        });
+      } catch (err) {
+        restoreChallenge(challenge);
+        throw err;
+      }
 
       const creatorSockets = getSocketIdsForUser(creator.id);
       for (const sid of creatorSockets) {

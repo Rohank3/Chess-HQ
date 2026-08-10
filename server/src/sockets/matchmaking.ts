@@ -121,9 +121,11 @@ export function registerMatchmakingHandlers(io: Server, socket: Socket): void {
         eloDelta: Math.abs(result.pair.white.elo - result.pair.black.elo),
       });
     } catch (err) {
+      // Log the real cause server-side, but never leak it to the client
+      // (internal DB/SQL details are not safe to ship over the wire).
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('queue_join_failed', { socketId: socket.id, message });
-      ack?.({ ok: false, error: 'internal_error', message });
+      ack?.({ ok: false, error: 'internal_error', message: 'Internal error' });
     }
   });
 

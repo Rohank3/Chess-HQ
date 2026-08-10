@@ -138,10 +138,6 @@ export function MatchmakingHub(): React.JSX.Element {
               />
             </div>
             <p className="mt-2 text-xs text-slate-400">Elo search window: ±{searchDelta}</p>
-            <p className="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs leading-relaxed text-slate-500">
-              Keep this tab open. To test solo, open a second window, play as
-              guest, and pick the same time control — you'll match instantly.
-            </p>
           </div>
 
           {error && (

@@ -58,6 +58,18 @@ export function removeChallenge(id: string): Challenge | null {
   return challenge;
 }
 
+/**
+ * Put a previously-claimed challenge back in the lobby. Used when an accept
+ * fails after the claim (e.g. game creation threw): a failed attempt must
+ * not burn the creator's link. No-op if it already expired while we were
+ * creating the game.
+ */
+export function restoreChallenge(challenge: Challenge): void {
+  if (Date.now() <= challenge.expiresAt) {
+    challenges.set(challenge.id, challenge);
+  }
+}
+
 /** How many live challenges this user currently has open. */
 export function countActiveChallengesFor(userId: string): number {
   let count = 0;

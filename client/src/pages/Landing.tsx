@@ -87,24 +87,14 @@ const FEATURES: ReadonlyArray<Feature> = [
   },
 ];
 
-const STEPS: ReadonlyArray<{ title: string; body: string }> = [
-  {
-    title: 'Pick a time control',
-    body: 'Bullet, blitz, rapid, classical — or set your own clock with a challenge link.',
-  },
-  {
-    title: 'Get matched',
-    body: 'The queue pairs you with a player near your rating. The search window widens automatically until a match is found.',
-  },
-  {
-    title: 'Play',
-    body: 'Make your moves, watch the synchronized clock, and claim the win. Results update your Elo immediately.',
-  },
-];
-
 const TIME_CONTROLS = ['Bullet', 'Blitz', 'Rapid', 'Classical'];
 
-/** Decorative animated board for the hero. Pure CSS/typography, no assets. */
+/**
+ * A large tilted 3D chessboard for the hero — pure CSS perspective, no
+ * assets. The board lies back in space (rotateX), and each piece is
+ * counter-rotated so it stands upright on its square facing the viewer.
+ * The whole group floats gently.
+ */
 function HeroBoard(): React.JSX.Element {
   const cells = Array.from({ length: 64 }, (_, i) => {
     const r = Math.floor(i / 8);
@@ -112,58 +102,79 @@ function HeroBoard(): React.JSX.Element {
     return { key: i, dark: (r + c) % 2 === 1 };
   });
 
+  // r=0 is rank 8 (far edge), r=7 is rank 1 (near edge).
   const pieces: ReadonlyArray<{
     glyph: string;
+    light: boolean;
     r: number;
     c: number;
-    size: string;
-    color: string;
-    delay: string;
+    size: number;
   }> = [
-    { glyph: '♞', r: 0, c: 0, size: 'text-3xl', color: 'text-neon-400', delay: '[animation-delay:-1s]' },
-    { glyph: '♛', r: 0, c: 3, size: 'text-4xl', color: 'text-accent-violet', delay: '[animation-delay:-3.5s]' },
-    { glyph: '♟', r: 3, c: 2, size: 'text-3xl', color: 'text-accent-emerald', delay: '[animation-delay:-2s]' },
-    { glyph: '♜', r: 7, c: 6, size: 'text-4xl', color: 'text-accent-rose', delay: '[animation-delay:-4.5s]' },
-    { glyph: '♚', r: 4, c: 5, size: 'text-3xl', color: 'text-slate-100', delay: '[animation-delay:-5.5s]' },
-  ];
-
-  const chips: ReadonlyArray<{ label: string; left: string; top: string; delay: string }> = [
-    { label: '1+0', left: '-14%', top: '10%', delay: '[animation-delay:-2s]' },
-    { label: '3+2', left: '104%', top: '34%', delay: '[animation-delay:-4s]' },
-    { label: '10+0', left: '-16%', top: '64%', delay: '[animation-delay:-1s]' },
-    { label: '30+0', left: '102%', top: '80%', delay: '[animation-delay:-3s]' },
+    { glyph: '♖', light: true, r: 7, c: 0, size: 44 },
+    { glyph: '♘', light: true, r: 7, c: 1, size: 44 },
+    { glyph: '♕', light: true, r: 7, c: 3, size: 48 },
+    { glyph: '♔', light: true, r: 7, c: 4, size: 48 },
+    { glyph: '♗', light: true, r: 7, c: 5, size: 44 },
+    { glyph: '♙', light: true, r: 6, c: 0, size: 40 },
+    { glyph: '♙', light: true, r: 6, c: 3, size: 40 },
+    { glyph: '♙', light: true, r: 6, c: 4, size: 40 },
+    { glyph: '♙', light: true, r: 6, c: 7, size: 40 },
+    { glyph: '♜', light: false, r: 0, c: 0, size: 44 },
+    { glyph: '♞', light: false, r: 0, c: 1, size: 44 },
+    { glyph: '♛', light: false, r: 0, c: 3, size: 48 },
+    { glyph: '♚', light: false, r: 0, c: 4, size: 48 },
+    { glyph: '♝', light: false, r: 0, c: 5, size: 44 },
+    { glyph: '♟', light: false, r: 1, c: 0, size: 40 },
+    { glyph: '♟', light: false, r: 1, c: 3, size: 40 },
+    { glyph: '♟', light: false, r: 1, c: 4, size: 40 },
+    { glyph: '♟', light: false, r: 1, c: 7, size: 40 },
   ];
 
   return (
-    <div className="relative mx-auto w-full max-w-[380px]" aria-hidden>
-      <div className="grid grid-cols-8 overflow-hidden rounded-2xl border border-slate-700 shadow-[0_0_80px_-20px_var(--color-neon-500)]">
-        {cells.map((cell) => (
-          <div
-            key={cell.key}
-            className={`aspect-square ${cell.dark ? 'bg-slate-800' : 'bg-slate-600/60'}`}
-          />
-        ))}
+    <div
+      className="relative mx-auto w-full max-w-[430px] select-none sm:max-w-[480px] lg:max-w-[540px]"
+      aria-hidden
+    >
+      {/* Warm light pool the board floats over */}
+      <div className="absolute inset-x-4 bottom-4 top-[45%] rounded-[50%] bg-neon-500/15 blur-3xl" />
+
+      <div className="relative animate-float" style={{ perspective: '1500px' }}>
+        <div
+          style={{
+            transformStyle: 'preserve-3d',
+            transform: 'rotateX(57deg)',
+          }}
+        >
+          <div className="grid grid-cols-8 overflow-hidden rounded-md border-4 border-slate-700/80 shadow-[0_50px_140px_-24px_rgba(34,211,238,0.3)]">
+            {cells.map((cell) => (
+              <div
+                key={cell.key}
+                className={`aspect-square ${cell.dark ? 'bg-[#b58863]' : 'bg-[#f0d9b5]'}`}
+              />
+            ))}
+          </div>
+
+          {pieces.map((p, i) => (
+            <span
+              key={`${p.glyph}-${i}`}
+              className="absolute"
+              style={{
+                left: `${p.c * 12.5 + 6.25}%`,
+                top: `${p.r * 12.5 + 1.5}%`,
+                transform: 'translate(-50%, -0.3em) rotateX(-57deg)',
+                fontSize: `${p.size}px`,
+                lineHeight: 1,
+                color: p.light ? '#f8fafc' : '#1e293b',
+                textShadow: p.light
+                  ? '0 0 1px #0f172a, 0 1px 1px #0f172a, 0 -1px 1px #0f172a, 0 10px 18px rgba(2,6,23,0.55)'
+                  : '0 0 1px #e2e8f0, 0 1px 1px #e2e8f0, 0 -1px 1px #e2e8f0, 0 10px 18px rgba(2,6,23,0.65)',
+              }}
+            >
+              {p.glyph}
+            </span>
+          ))}
+        </div>
       </div>
-
-      {pieces.map((p) => (
-        <span
-          key={p.glyph}
-          className={`absolute animate-float ${p.delay} ${p.size} ${p.color}`}
-          style={{ left: `${p.c * 12.5 + 1}%`, top: `${p.r * 12.5 + 0.5}%` }}
-        >
-          {p.glyph}
-        </span>
-      ))}
-
-      {chips.map((chip) => (
-        <span
-          key={chip.label}
-          className={`absolute animate-float ${chip.delay} rounded-full border border-slate-700 bg-slate-900/90 px-2.5 py-1 font-mono text-xs text-neon-400`}
-          style={{ left: chip.left, top: chip.top }}
-        >
-          {chip.label}
-        </span>
-      ))}
     </div>
   );
 }
@@ -197,12 +208,16 @@ export function Landing(): React.JSX.Element {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(40rem_40rem_at_90%_105%,rgba(139,92,246,0.1),transparent_60%)]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(45rem_45rem_at_85%_25%,rgba(139,92,246,0.12),transparent_60%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(40rem_40rem_at_110%_100%,rgba(34,211,238,0.08),transparent_65%)]"
       />
 
       {/* Hero */}
-      <section className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-14 px-6 py-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:py-32">
-        <div className="text-center lg:text-left">
+      <section className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-16 px-6 pb-24 pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)] lg:gap-10 lg:pb-32 lg:pt-28">
+        <div className="relative z-10 text-center lg:text-left">
           <p className="inline-flex items-center gap-2.5 rounded-full border border-slate-800 bg-slate-900/60 px-4 py-1.5 text-xs font-medium tracking-wide text-slate-300">
             <span
               className="size-1.5 rounded-full bg-neon-400 shadow-[0_0_8px_2px_var(--color-neon-400)]"
@@ -211,7 +226,7 @@ export function Landing(): React.JSX.Element {
             Real-time multiplayer chess
           </p>
 
-          <h1 className="mt-6 text-balance text-5xl font-bold tracking-tight text-slate-100 sm:text-6xl">
+          <h1 className="mt-6 text-balance text-5xl font-bold tracking-tight text-slate-100 sm:text-6xl lg:text-7xl">
             Play chess, <span className="text-neon-400">in real time</span>.
           </h1>
 
@@ -305,25 +320,6 @@ export function Landing(): React.JSX.Element {
               <p className="mt-2 text-sm leading-relaxed text-slate-400">{feature.body}</p>
             </article>
           ))}
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="border-t border-slate-800/60">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="text-center text-2xl font-semibold text-slate-100">How it works</h2>
-          <ol className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {STEPS.map((step, i) => (
-              <li
-                key={step.title}
-                className="relative rounded-2xl border border-slate-800 bg-slate-900/40 p-6"
-              >
-                <span className="font-mono text-xs font-semibold text-neon-400">0{i + 1}</span>
-                <h3 className="mt-2 text-sm font-semibold text-slate-100">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">{step.body}</p>
-              </li>
-            ))}
-          </ol>
         </div>
       </section>
 
