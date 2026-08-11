@@ -26,6 +26,12 @@ export function createSmtpTransport(config: SmtpConfig): Transporter {
     port: config.port,
     secure: config.secure,
     auth: { user: config.user, pass: config.pass },
+    // Fail fast instead of nodemailer's 2-minute default connection timeout:
+    // a healthy SMTP server (Gmail) answers in well under a second, so these
+    // are generous for the happy path while turning a broken network / wrong
+    // host into a ~15s failure in the logs instead of a 2m silent hang.
+    connectionTimeout: 15_000,
+    greetingTimeout: 20_000,
   });
 }
 

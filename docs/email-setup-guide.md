@@ -134,6 +134,23 @@ zero-cost option (~500 emails/day, plenty for verification + resets).
 works (Zoho, Outlook, your own mail server). For STARTTLS use port 587 with
 `SMTP_SECURE=false`.
 
+### SMTP troubleshooting: `ENETUNREACH` / `Connection timeout`
+
+Render's free instances have **no outbound IPv6**, and `smtp.gmail.com`
+publishes IPv6 (AAAA) records. If the server's DNS lookup picks the IPv6
+address first, every send dies before reaching Gmail, e.g.:
+
+```
+{"msg":"mail_send_failed","context":"resend","message":"connect ENETUNREACH 2607:f8b0:...:465 - Local (:::0)"}
+```
+
+The server forces IPv4-first resolution for all outbound connections
+(`setDefaultResultOrder('ipv4first')` at the top of `server/src/index.ts`),
+which fixes exactly this. If you still see the error after pulling that
+commit, **redeploy** — the fix only takes effect once a build containing it
+is live, and a Render redeploy is the only way to get the new code running
+(changing env vars in the dashboard does not rebuild).
+
 ### SMTP trade-offs vs a verified Resend domain
 
 - **Free and instant** — no domain, no DNS records.
