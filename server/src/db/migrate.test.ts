@@ -9,6 +9,7 @@ const migrationPath = resolve(here, 'migrations/001_init.sql');
 const nullableTerminationPath = resolve(here, 'migrations/002_games_termination_nullable.sql');
 const friendshipsPath = resolve(here, 'migrations/003_friendships.sql');
 const emailVerificationPath = resolve(here, 'migrations/004_email_verification.sql');
+const emailCasePath = resolve(here, 'migrations/005_email_case_normalization.sql');
 
 nodeTest(
   '003 creates the friendships table with a symmetric pair-unique index',
@@ -45,6 +46,25 @@ nodeTest(
       sql.includes('users_email_required') &&
         sql.includes('CHECK (is_guest = TRUE OR email IS NOT NULL) NOT VALID'),
       'registered users must carry an email, guests exempt, legacy rows untouched',
+    );
+  },
+);
+
+nodeTest(
+  '005 normalizes email casing and enforces case-insensitive uniqueness',
+  async (_t: TestContext) => {
+    const sql = readFileSync(emailCasePath, 'utf8');
+    assert.ok(
+      sql.includes('users_email_lower_idx') && sql.includes('LOWER(email)'),
+      'a unique index on LOWER(email) must enforce case-insensitive uniqueness',
+    );
+    assert.ok(
+      sql.includes('discarded-'),
+      'case-duplicate losers must be moved to a synthetic placeholder email',
+    );
+    assert.ok(
+      sql.includes('email_verified_at IS NOT NULL') && sql.includes('created_at DESC'),
+      'the kept row must be the verified one, else the newest',
     );
   },
 );

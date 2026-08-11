@@ -16,7 +16,11 @@ export const passwordSchema = z
 export const emailSchema = z
   .string()
   .email({ message: 'Invalid email' })
-  .max(254);
+  .max(254)
+  // Normalize to lowercase so lookups and the UNIQUE constraint are
+  // unambiguous: 'User@gmail.com' and 'user@gmail.com' must never be two
+  // separate accounts (that produced a verify/login loop).
+  .transform((v) => v.toLowerCase());
 
 export const registerSchema = z.object({
   username: usernameSchema,

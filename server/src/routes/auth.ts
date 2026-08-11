@@ -45,10 +45,14 @@ function resetLink(token: string): string {
 }
 
 /** Mint a fresh verification token, persist its hash, and email the link.
- *  Used at registration and by the resend endpoint. */
+ *  Used at registration and by the resend endpoint. The email greets the
+ *  account by username — with case-insensitive email matching, a shared
+ *  address can resolve to one row, and the recipient must be able to tell
+ *  which account the link belongs to. */
 async function issueVerificationEmail(
   userId: string,
   email: string,
+  username: string,
 ): Promise<void> {
   const token = generateEmailToken();
   await pool.query(
@@ -61,8 +65,8 @@ async function issueVerificationEmail(
     to: email,
     subject: 'Confirm your Chess-HQ email',
     text:
-      `Welcome to Chess-HQ!\n\n` +
-      `Confirm your email to enable password recovery:\n${verificationLink(token)}\n\n` +
+      `Hi ${username},\n\n` +
+      `Welcome to Chess-HQ! Confirm your email to enable password recovery:\n${verificationLink(token)}\n\n` +
       `This link expires in 24 hours. If you didn't create an account, you can ignore this email.`,
   });
 }
@@ -104,9 +108,11 @@ authRouter.post(
       }
 
       // Email is now mandatory for registered accounts (the schema enforces
-      // it), so the uniqueness check always runs.
+      // it), so the uniqueness check always runs. Case-insensitive: the
+      // schema already lowercases the input, but LOWER() on the column keeps
+      // pre-normalization legacy rows from slipping through as "available".
       const dupeEmail = await pool.query<{ id: string }>(
-        'SELECT id FROM users WHERE email = $1',
+        'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
         [email],
       );
       if (dupeEmail.rowCount !== 0) {
@@ -132,7 +138,7 @@ authRouter.post(
       // here: the account is created in a pending state and cannot be used
       // until the emailed link is clicked — verification is a gate on
       // registration, not an afterthought.
-      await sendMailSafe(() => issueVerificationEmail(user.id, email), 'register');
+      await sendMailSafe(() => issueVerificationEmail(user.id, email, user.username), 'register');
       res.status(201).json({ ok: true });
     } catch (err) {
       next(err);
@@ -324,17 +330,21 @@ authRouter.post(
       const { email } = parsed.data;
       const row = await pool.query<{
         id: string;
+        username: string;
         email_verified_at: string | null;
         is_guest: boolean;
       }>(
-        'SELECT id, email_verified_at, is_guest FROM users WHERE email = $1 LIMIT 1',
+        'SELECT id, username, email_verified_at, is_guest FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
         [email],
       );
       const user = row.rows[0];
       // Only send to real pending accounts; everyone else gets the uniform
       // success envelope.
       if (user && !user.is_guest && !user.email_verified_at) {
-        await sendMailSafe(() => issueVerificationEmail(user.id, email), 'resend');
+        await sendMailSafe(
+          () => issueVerificationEmail(user.id, email, user.username),
+          'resend',
+        );
       }
       res.status(200).json({ ok: true });
     } catch (err) {
@@ -369,7 +379,7 @@ authRouter.post(
         email_verified_at: string | null;
         is_guest: boolean;
       }>(
-        'SELECT id, username, email_verified_at, is_guest FROM users WHERE email = $1 LIMIT 1',
+        'SELECT id, username, email_verified_at, is_guest FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
         [email],
       );
       const user = row.rows[0];

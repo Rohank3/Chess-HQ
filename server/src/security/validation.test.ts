@@ -70,6 +70,16 @@ nodeTest('validation: register rejects a malformed email', () => {
   assert.ok(!result.success);
 });
 
+nodeTest('validation: emails are normalized to lowercase', () => {
+  const result = registerSchema.safeParse({
+    username: 'rohan',
+    email: 'Rohan@Example.COM',
+    password: 'long-enough-pw',
+  });
+  assert.ok(result.success);
+  assert.equal(result.data.email, 'rohan@example.com');
+});
+
 nodeTest('validation: login accepts identifier + password', () => {
   const result = loginSchema.safeParse({ identifier: 'rohan', password: 'any-password' });
   assert.ok(result.success);
