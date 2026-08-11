@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { setDefaultResultOrder } from 'node:dns';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -12,6 +13,13 @@ import { challengesRouter } from './routes/challenges.js';
 import { friendsRouter } from './routes/friends.js';
 import { createSocketLayer } from './sockets/index.js';
 import { runMigrations } from './db/migrate.js';
+
+// Render instances have no outbound IPv6. smtp.gmail.com publishes AAAA
+// records and Node's default "verbatim" lookup can prefer them, so SMTP
+// sends died with `ENETUNREACH ...:465` / Connection timeout before ever
+// reaching Gmail. Prefer IPv4 for every outbound hostname connection
+// (matches the IPv4-only hosting); this must run before any connect.
+setDefaultResultOrder('ipv4first');
 
 const app = express();
 
