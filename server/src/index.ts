@@ -1,11 +1,12 @@
 import { createServer } from 'node:http';
-import { setDefaultResultOrder } from 'node:dns';
+import { setDefaultResultOrder, promises as dnsPromises } from 'node:dns';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import { env, isProduction } from './config/env.js';
 import { logger } from './utils/logger.js';
+import { createSmtpTransportFromEnv } from './services/mailer.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { statsRouter } from './routes/stats.js';
@@ -154,6 +155,7 @@ await runMigrations();
 const mailConfig = {
   provider: env.EMAIL_PROVIDER,
   from: env.EMAIL_FROM,
+  node: process.version,
   smtpHost: env.SMTP_HOST,
   smtpPort: env.SMTP_PORT,
   smtpSecure: env.SMTP_SECURE,
@@ -174,6 +176,44 @@ if (isProduction && env.EMAIL_PROVIDER === 'none') {
   });
 } else {
   logger.info('mail_config', mailConfig);
+}
+
+// Boot-time SMTP self-test: connect and authenticate against the configured
+// mail host WITHOUT sending a message (nodemailer's verify()). A broken mail
+// path — wrong credentials, blocked egress, or IPv6-only resolution on
+// Render's IPv4-only network — shows up in the boot logs as `mail_smtp_check
+// { ok:false }` within seconds, instead of surfacing later as a silent
+// no-show after someone registers. Fire-and-forget: a failed check must not
+// crash or delay the server, and it never touches a real recipient.
+const smtpHost = env.SMTP_HOST;
+if (
+  env.EMAIL_PROVIDER === 'smtp' &&
+  smtpHost &&
+  env.SMTP_USER &&
+  env.SMTP_PASS
+) {
+  void (async () => {
+    const config: Record<string, unknown> = { ...mailConfig };
+    try {
+      // Log the actual address order the running build resolves, so a stale
+      // deploy (pre-ipv4first) is visible here as IPv6-first instead of a
+      // later ENETUNREACH mystery.
+      const addresses = await dnsPromises.lookup(smtpHost, { all: true });
+      config.smtpHostResolved = addresses.map((a) => a.address);
+    } catch {
+      config.smtpHostResolved = 'lookup failed';
+    }
+    try {
+      await createSmtpTransportFromEnv().verify();
+      logger.info('mail_smtp_check', { ...config, ok: true });
+    } catch (err) {
+      logger.error('mail_smtp_check', {
+        ...config,
+        ok: false,
+        message: err instanceof Error ? err.message : 'unknown',
+      });
+    }
+  })();
 }
 
 httpServer.listen(env.PORT, () => {

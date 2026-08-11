@@ -35,6 +35,12 @@ export function createSmtpTransport(config: SmtpConfig): Transporter {
   });
 }
 
+/** Production transport straight from env; throws when SMTP_* are missing
+ *  (mirrors the Resend path so a misconfigured provider surfaces loudly). */
+export function createSmtpTransportFromEnv(): Transporter {
+  return createSmtpTransport(requireSmtpEnv());
+}
+
 /**
  * Outbound email. One interface, three adapters:
  *

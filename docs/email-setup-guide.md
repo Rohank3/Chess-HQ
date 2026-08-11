@@ -149,7 +149,21 @@ The server forces IPv4-first resolution for all outbound connections
 which fixes exactly this. If you still see the error after pulling that
 commit, **redeploy** — the fix only takes effect once a build containing it
 is live, and a Render redeploy is the only way to get the new code running
-(changing env vars in the dashboard does not rebuild).
+(changing env vars in the dashboard does not rebuild). Confirm which commit
+the latest deploy actually built from on the service's **Deploys** tab.
+
+After redeploying, the **boot logs** verify the mail path by themselves:
+
+- `mail_config` shows the resolved provider plus `"node":"v…"` and
+  `smtpHostResolved` — the address list; IPv4-first means the fix is live.
+- `mail_smtp_check` connects + authenticates against the mail host without
+  sending: `"ok":true` means the server can deliver, `"ok":false` logs the
+  exact error (no need to register an account to find out).
+
+If `mail_smtp_check` reports `ok:false` with a timeout / ENETUNREACH even on
+the fixed build, Gmail's 465 port may be unreachable from Render's network:
+try `SMTP_PORT=587` with `SMTP_SECURE=false` (STARTTLS), or switch to the
+Resend provider (section 2), which goes out over plain HTTPS.
 
 ### SMTP trade-offs vs a verified Resend domain
 
