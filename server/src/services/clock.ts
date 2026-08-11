@@ -16,11 +16,14 @@
  *
  * Increment convention (FIDE/Lichess): the player who just moved receives
  * `incrementMs` added to their bank AFTER the elapsed time has been
- * deducted. The first move of the game does NOT receive an increment,
- * because there is no prior clock event to time against --
- * `lastMoveAt === null` until the first move is played, and awarding an
- * increment against a phantom zero would inflate both clocks by
- * `incrementMs` on every fresh game.
+ * deducted. Games are created with `lastMoveAt` stamped at creation (the
+ * first clock event), so the FIRST move is timed against game creation and
+ * receives its increment like every other move -- White's clock is live
+ * from the moment the game exists, not frozen until the first move.
+ *
+ * The `lastMoveAt === null` branch below is kept as a safety net for any
+ * row created before this convention (it simply records the stamp without
+ * debiting), but new games never hit it.
  */
 
 export interface ClockState {
@@ -29,9 +32,11 @@ export interface ClockState {
   /** Black's remaining bank in milliseconds. */
   blackMs: number;
   /**
-   * `null` until the first move; afterwards, the wall-clock time of the
-   * most recent move. The side to move is the opposite of the side that
-   * made that move.
+   * The wall-clock time of the most recent clock event. Set at game
+   * creation (so White's clock runs from the start); afterwards it is the
+   * time of the most recent move. The side to move is the opposite of the
+   * side that made the last move (White while lastMoveAt is the creation
+   * stamp). Null only on legacy rows / safety-net callers.
    */
   lastMoveAt: number | null;
 }
@@ -57,19 +62,18 @@ export interface ClockMoveResult {
 /**
  * Apply one move's worth of clock bookkeeping.
  *
- * On the first move (state.lastMoveAt === null): no time is debited from
- * either side and no increment is awarded. lastMoveAt is advanced to nowMs.
- * The first player to move is white by chess convention; whoever calls
- * applyMove with `lastMoveAt === null` simply records the starting stamp.
- *
- * On subsequent moves: the mover's bank is debited `(now - lastMoveAt)`,
- * the mover's bank is then credited `incrementMs`, and lastMoveAt is
- * advanced. The opponent's bank is untouched -- it was their clock that
- * was running while they were deciding? No: the *mover's* clock was running
- * for the entire interval since the previous move. (The clock runs against
- * the side to move; after they move, the other side's clock starts.) So we
+ * With a real `lastMoveAt` (always set for new games -- stamped at
+ * creation): the mover's bank is debited `(now - lastMoveAt)`, the mover's
+ * bank is then credited `incrementMs`, and lastMoveAt is advanced. The
+ * opponent's bank is untouched -- the *mover's* clock was running for the
+ * entire interval since the previous move. (The clock runs against the
+ * side to move; after they move, the other side's clock starts.) So we
  * debit the mover, not the opponent -- the interval between two moves is
  * the mover's thinking time on their own clock.
+ *
+ * Safety net: if `lastMoveAt === null` (a legacy row), no time is debited
+ * and no increment is awarded; we simply record the stamp. This branch
+ * exists only so old rows can't corrupt a clock -- new games never hit it.
  */
 export function applyMove(input: ClockMoveInput): ClockMoveResult {
   const { state, mover, nowMs, incrementMs } = input;

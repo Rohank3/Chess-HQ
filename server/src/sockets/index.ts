@@ -2,6 +2,7 @@ import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from '../middleware/authSocket.js';
 import { attachSocketAuth } from '../middleware/authSocket.js';
 import { matchmakingQueue } from '../services/matchmaking.js';
+import { startAbandonedGameSweep } from '../services/game-sweep.js';
 import { registerMatchmakingHandlers } from './matchmaking.js';
 import { registerChallengeHandlers } from './challenges.js';
 import { registerGameHandlers } from './game.js';
@@ -11,6 +12,7 @@ import { logger } from '../utils/logger.js';
 export function createSocketLayer(io: Server): void {
   attachSocketAuth(io);
   matchmakingQueue.startCleanup();
+  startAbandonedGameSweep();
 
   io.on('connection', (rawSocket) => {
     const socket = rawSocket as AuthenticatedSocket;

@@ -4,11 +4,13 @@ import { useToast } from '../context/ToastContext';
 import { emitWithAck } from './emit';
 import type {
   Ack,
+  CommandColor,
   DrawDeclinedPayload,
   DrawOfferedPayload,
   GameOverPayload,
   GameSnapshot,
   MoveInput,
+  PlayerSummary,
 } from './types';
 
 export interface UseGameInput {
@@ -22,6 +24,12 @@ export interface UseGameResult {
   sanHistory: string[];
   pendingIllegalRollback: boolean;
   lastAckError: string | null;
+  /** Viewer's colour, from the game:subscribe ack (deep-linked rooms). */
+  color: CommandColor | null;
+  /** Opponent summary, from the game:subscribe ack (deep-linked rooms). */
+  opponent: PlayerSummary | null;
+  /** Set when the game:subscribe ack failed -- the room can't load. */
+  subscribeError: string | null;
   makeMove: (input: MoveInput) => Promise<Ack>;
   resign: () => Promise<Ack>;
   offerDraw: () => Promise<Ack>;
@@ -58,6 +66,9 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
   const [sanHistory, setSanHistory] = useState<string[]>([]);
   const [pendingIllegalRollback, setPendingIllegalRollback] = useState(false);
   const [lastAckError, setLastAckError] = useState<string | null>(null);
+  const [color, setColor] = useState<CommandColor | null>(null);
+  const [opponent, setOpponent] = useState<PlayerSummary | null>(null);
+  const [subscribeError, setSubscribeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!gameId || !socket) return;
@@ -66,14 +77,34 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
     // broadcast on a move/game-over, so a freshly adopted game (match or
     // challenge) would sit on a blank board with zeroed clocks forever
     // without this. Re-subscribing on every 'connect' covers reconnects.
+    // The ack also carries the viewer's colour + opponent so a deep-linked
+    // room (no navigation state) can rebuild its header.
     const subscribe = () => {
-      socket.emit('game:subscribe', { gameId });
+      void emitWithAck(socket, 'game:subscribe', { gameId }).then((ack) => {
+        if (ack.ok) {
+          setSubscribeError(null);
+          if (ack.color) setColor(ack.color);
+          if (ack.opponent) setOpponent(ack.opponent);
+        } else {
+          // A rejected subscribe means the room can't load (forbidden /
+          // internal error) -- surface it instead of silently showing a
+          // board with 0:00 clocks forever.
+          setSubscribeError(ack.message ?? ack.error);
+        }
+      });
     };
 
     const onState = (snap: GameSnapshot) => {
       if (snap.gameId !== gameId) return;
       setSnapshot(snap);
+      setSubscribeError(null);
       setPendingIllegalRollback(false);
+      // A snapshot can itself carry the terminal state (reload/deep-link of
+      // a finished game, where the live game:over event was never seen) --
+      // adopt it so the result modal renders there too.
+      if (snap.gameOver) {
+        setGameOver({ gameId: snap.gameId, ...snap.gameOver });
+      }
       // Append the new san if it's a fresh move. We compare against the
       // last entry to suppress re-broadcasts; the server sends a snapshot
       // on every move and on the terminal path (where lastMove may be null).
@@ -128,6 +159,9 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
     setSanHistory([]);
     setPendingIllegalRollback(false);
     setLastAckError(null);
+    setColor(null);
+    setOpponent(null);
+    setSubscribeError(null);
   }, [gameId]);
 
   const rememberErr = useCallback(
@@ -186,6 +220,9 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
     sanHistory,
     pendingIllegalRollback,
     lastAckError,
+    color,
+    opponent,
+    subscribeError,
     makeMove,
     resign,
     offerDraw,

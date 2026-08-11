@@ -5,6 +5,7 @@ import { createGame } from '../services/games.js';
 import { gameState } from '../services/game-state.js';
 import { pool } from '../db/pool.js';
 import { roomForGame } from './index.js';
+import { ensureWatchdog } from './game.js';
 import { logger } from '../utils/logger.js';
 
 function toPlayerSummary(
@@ -90,6 +91,8 @@ export function registerMatchmakingHandlers(io: Server, socket: Socket): void {
       // Seed the in-memory chess.js instance so the first game:move is O(1)
       // (no DB rehydrate needed).
       gameState.seed(game.id, game.fen);
+      // Clock runs from creation; the timeout watchdog must too.
+      ensureWatchdog(io, game.id, game);
 
       const opponentWhite = toPlayerSummary(result.pair.white);
       const opponentBlack = toPlayerSummary(result.pair.black);

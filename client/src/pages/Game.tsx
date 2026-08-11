@@ -21,6 +21,20 @@ function GameRoom(): React.JSX.Element {
   const { optimisticFen, gameId, myColor, opponent, game, matchmaking, submitMove, legalMovesFrom } =
     useGameContext();
 
+  // A rejected game:subscribe (forbidden / internal error) with no snapshot
+  // means the room cannot load at all -- show that instead of a board with
+  // 0:00 clocks.
+  if (game.subscribeError && !game.snapshot && !game.gameOver) {
+    return (
+      <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6">
+        <div className="w-full rounded-2xl border border-accent-rose/40 bg-accent-rose/10 p-8 text-center">
+          <h1 className="text-lg font-semibold text-accent-rose">Couldn't open this game</h1>
+          <p className="mt-2 text-sm text-slate-300">{game.subscribeError}</p>
+        </div>
+      </main>
+    );
+  }
+
   const position = optimisticFen ?? START_FEN;
   const snapshot = game.snapshot;
   const isGameOver = !!game.gameOver || !!snapshot?.gameOver;

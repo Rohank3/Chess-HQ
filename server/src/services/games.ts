@@ -115,14 +115,19 @@ function mapGameRow(row: RawGameRow): GameRow {
 }
 
 export async function createGame(input: CreateGameInput): Promise<GameRow> {
+  // last_move_at is stamped at creation (not NULL) so White's clock runs
+  // from the moment the game exists: the client countdown starts at once
+  // instead of sitting frozen at the full bank until the first move, and
+  // the timeout watchdog is live from t=0 (a stranded game -- nobody ever
+  // moves -- still resolves by White flagging instead of lingering forever).
   const result = await pool.query<RawGameRow>(
     `INSERT INTO games (
        white_user_id, black_user_id,
        white_elo_before, black_elo_before,
        time_control, initial_ms, increment_ms,
-       white_ms, black_ms
+       white_ms, black_ms, last_move_at
      )
-     VALUES ($1, $2, $3, $4, $5::text, $6, $7, $8, $8)
+     VALUES ($1, $2, $3, $4, $5::text, $6, $7, $8, $8, now())
      RETURNING ${SELECT_COLUMNS}`,
     [
       input.whiteUserId,
@@ -287,6 +292,11 @@ interface PlayerStatRow {
  * to a stale Elo read. If the game is already ended when this runs (e.g.
  * the clock watchdog and a resign fire concurrently), the persisted row is
  * returned untouched -- first-writer-wins, no double Elo application.
+ *
+ * An 'aborted' game (nobody ever played it out) is settled WITHOUT touching
+ * either player's rating or w/l/d counters -- it never happened. The row's
+ * elo_after columns stay NULL, which satisfies the
+ * games_elo_after_consistency CHECK.
  */
 export async function endGame(input: EndGameInput): Promise<GameRow> {
   return withTransaction(async (client) => {
@@ -295,6 +305,23 @@ export async function endGame(input: EndGameInput): Promise<GameRow> {
     if (game.endedAt !== null) {
       logger.info('endGame_skip_already_ended', { gameId: input.gameId });
       return game;
+    }
+
+    // Aborted: settle the row, skip Elo + stats entirely. The abandoned-game
+    // sweep is the only caller today; a cancelled match is not a rating event.
+    if (input.termination === 'aborted') {
+      await client.query(
+        `UPDATE games SET
+           winner = NULL,
+           termination = $2::text,
+           ended_at = now(),
+           draw_offered_by = NULL,
+           draw_offer_expires_at = NULL
+         WHERE id = $1`,
+        [input.gameId, input.termination],
+      );
+      logger.info('game_aborted', { gameId: input.gameId });
+      return getGameForUpdate(client, input.gameId);
     }
 
     const white = await loadPlayerStats(client, game.whiteUserId);
@@ -432,4 +459,42 @@ export async function getActiveGamesForUser(userId: string): Promise<{ id: strin
     [userId],
   );
   return result.rows;
+}
+
+/** Lightweight shape the abandoned-game sweep needs: identity, players,
+ *  whether anyone has actually played (moves), and the clock. The sweep
+ *  only aborts games where at least one player never moved, and sizes its
+ *  grace from the clock -- so it needs moves + initial_ms, nothing else.
+ *  endGame does the real work once a game is flagged. */
+export interface ActiveGameSummary {
+  id: string;
+  whiteUserId: string;
+  blackUserId: string;
+  startedAt: string;
+  /** Full SAN move list; a length >= 2 means BOTH players have moved. */
+  moves: string[];
+  initialMs: number;
+}
+
+export async function getAllActiveGames(): Promise<ActiveGameSummary[]> {
+  const result = await pool.query<{
+    id: string;
+    white_user_id: string;
+    black_user_id: string;
+    started_at: string;
+    moves: string[];
+    initial_ms: number;
+  }>(
+    `SELECT id, white_user_id, black_user_id, started_at, moves, initial_ms
+     FROM games
+     WHERE ended_at IS NULL`,
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    whiteUserId: row.white_user_id,
+    blackUserId: row.black_user_id,
+    startedAt: row.started_at,
+    moves: row.moves,
+    initialMs: row.initial_ms,
+  }));
 }

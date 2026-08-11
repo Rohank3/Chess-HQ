@@ -59,6 +59,21 @@ const schema = z.object({
   // opponent to read the offer and respond, short enough that an abandoned
   // offer doesn't leave a game in a "offer pending" limbo forever.
   DRAW_OFFER_TTL_MS: z.coerce.number().int().positive().default(30_000),
+  // Abandoned-game sweep timing. The sweep only aborts games where at
+  // least one player never moved (a game both players have engaged in is
+  // left entirely to the clock); the grace period before that abort scales
+  // with the game's own clock so a bullet game settles fast while a
+  // classical game gets a long window: grace = clamp(initialMs * FRACTION,
+  // MIN, MAX). Defaults: 40% of the clock, floored at 30s, capped at 15m --
+  // always comfortably under the clock itself, so the abort beats the
+  // timeout watchdog on the games it applies to.
+  ABANDONED_GAME_GRACE_FRACTION: z.coerce.number().positive().max(1).default(0.4),
+  ABANDONED_GAME_GRACE_MIN_MS: z.coerce.number().int().positive().default(30_000),
+  ABANDONED_GAME_GRACE_MAX_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60_000),
   // Per-socket illegal-move threshold. A socket that pushes this many
   // illegal/not-your-turn moves is force-disconnected -- the cheapest move-
   // spam guard that still lets a real player misclick a few times. The count

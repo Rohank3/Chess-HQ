@@ -5,6 +5,7 @@ import { gameState } from '../services/game-state.js';
 import {
   clearDrawOffer,
   endGame,
+  getActiveGamesForUser,
   getGame,
   recordMove,
   setDrawOffer,
@@ -19,6 +20,7 @@ import {
   type Side,
 } from '../services/clock.js';
 import { env, isProduction } from '../config/env.js';
+import { pool } from '../db/pool.js';
 import { roomForGame } from './index.js';
 import { logger } from '../utils/logger.js';
 import type { AuthenticatedSocket } from '../middleware/authSocket.js';
@@ -44,14 +46,18 @@ import type { AuthenticatedSocket } from '../middleware/authSocket.js';
  *     converts the throw into a typed ack, never into a server crash.
  *
  * Clock authority:
- *   - each game:move advances the mover's clock by (now - lastMoveAt) and
- *     awards the increment AFTER the deduction. The first move debits zero
- *     (no prior event) and awards no increment -- FIDE/Lichess convention.
+ *   - games are created with last_move_at stamped at creation, so White's
+ *     clock runs from the moment the game exists. Each game:move advances
+ *     the mover's clock by (now - lastMoveAt) and awards the increment
+ *     AFTER the deduction -- including the first move, which is timed
+ *     against the creation stamp.
  *   - broadcast snapshots always carry the authoritative clock so the
  *     clients' countdowns re-anchor to the server on every move.
  *   - a per-game 250ms watchdog runs while a clock is ticking; when the
  *     side-to-move's flag falls (bank <= 0), the watchdog calls endGame
- *     with termination:'timeout', winner=the opponent. The watchdog is
+ *     with termination:'timeout', winner=the opponent. Because lastMoveAt
+ *     is set at creation, the watchdog is live from t=0, so a stranded
+ *     game (nobody ever moves) still resolves by timeout. The watchdog is
  *     cleared on every game over path, so a finished game releases its
  *     timer at once.
  *
@@ -95,6 +101,10 @@ interface GameSnapshot {
   gameOver?: {
     winner: string | null;
     termination: Termination;
+    whiteEloBefore: number | null;
+    blackEloBefore: number | null;
+    whiteEloAfter: number | null;
+    blackEloAfter: number | null;
   };
 }
 
@@ -112,6 +122,27 @@ interface CapturedDelta {
 }
 
 export function registerGameHandlers(io: Server, socket: Socket): void {
+  // A pull-side complement to `game:rejoined`: the server pushes active
+  // games on every fresh socket connection, but a client that stays
+  // connected while its user is elsewhere in the app never reconnects, so
+  // it would miss that a challenge was accepted in the meantime. This ack
+  // lets the client ask "do I have a live game right now?" on mount and
+  // adopt the newest one.
+  socket.on('game:active', async (_raw, ack) => {
+    try {
+      const userId = socket.data.userId as string;
+      const rows = await getActiveGamesForUser(userId);
+      // Same `{ gameId }[]` shape as the `game:rejoined` push so the client
+      // adopts either source with one code path.
+      const games = rows.map((row) => ({ gameId: row.id }));
+      ack?.({ ok: true, games });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      logger.error('game_active_failed', { sid: socket.id, message });
+      ack?.({ ok: false, error: 'internal_error', message: safeErrorMessage(err) });
+    }
+  });
+
   // The initial-state fetch. `game:state` is otherwise only broadcast on a
   // move or at game-over, so a freshly matched game (or a reconnecting
   // socket) would never learn the current position/clocks without this.
@@ -132,7 +163,8 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       const userId = socket.data.userId as string;
 
       const game = await getGame(gameId);
-      if (colorOf(userId, game) === null) {
+      const myColor = colorOf(userId, game);
+      if (myColor === null) {
         ack?.({ ok: false, error: 'forbidden', message: 'Not a player in this game' });
         return;
       }
@@ -140,8 +172,21 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       socket.join(roomForGame(gameId));
       const chess = await gameState.loadOrRehydrate(gameId);
       const isOver = game.endedAt !== null;
+      // Safety net: any subscribed live game gets a watchdog even if its
+      // creation site didn't start one (e.g. legacy rows or a missed hook).
+      if (!isOver) ensureWatchdog(io, gameId, game);
       socket.emit('game:state', snapshot(chess, game, null, isOver));
-      ack?.({ ok: true, status: 'subscribed', gameId });
+      // The ack carries the viewer's colour + opponent so a deep-linked or
+      // reloaded room (no location.state to seed from) can rebuild the full
+      // header: board orientation, drag rules, and the opponent strip all
+      // depend on them, and the snapshot alone doesn't say which side you are.
+      ack?.({
+        ok: true,
+        status: 'subscribed',
+        gameId,
+        color: myColor,
+        opponent: await loadOpponentSummary(userId, game),
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('game_subscribe_failed', { sid: socket.id, message });
@@ -460,10 +505,15 @@ async function finish(
  * current wall-clock; if the flag is down, it calls finish with
  * termination:'timeout' and the opponent as the winner. unref'd so it can't
  * keep the event loop alive after the socket loop closes.
+ *
+ * Exported for the game-creation sites (matchmaking, challenge accept) so
+ * the watchdog is live from t=0 -- with last_move_at stamped at creation,
+ * White's clock is already running and a stranded game must still resolve
+ * by timeout even if nobody ever subscribes.
  */
-function ensureWatchdog(io: Server, gameId: string, game: GameRow): void {
+export function ensureWatchdog(io: Server, gameId: string, game: GameRow): void {
   if (watchdogs.has(gameId)) return;
-  if (game.lastMoveAt === null) return; // not ticking yet
+  if (game.lastMoveAt === null) return; // defensive: legacy rows only
   if (game.endedAt !== null) return;
 
   const timer = setInterval(() => {
@@ -529,6 +579,30 @@ function colorOf(userId: string, game: GameRow): 'w' | 'b' | null {
   if (userId === game.whiteUserId) return 'w';
   if (userId === game.blackUserId) return 'b';
   return null;
+}
+
+interface OpponentSummary {
+  id: string;
+  username: string;
+  elo: number;
+}
+
+/** The OTHER player's public profile, for the room header on a reloaded
+ *  game where the client has no navigation state to restore the opponent
+ *  from. Elo-before from the games row; username from the users table. */
+async function loadOpponentSummary(userId: string, game: GameRow): Promise<OpponentSummary | null> {
+  const opponentId = userId === game.whiteUserId ? game.blackUserId : game.whiteUserId;
+  const result = await pool.query<{ username: string }>(
+    'SELECT username FROM users WHERE id = $1',
+    [opponentId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: opponentId,
+    username: row.username,
+    elo: userId === game.whiteUserId ? (game.blackEloBefore ?? 1200) : (game.whiteEloBefore ?? 1200),
+  };
 }
 
 /**
@@ -644,6 +718,14 @@ function snapshot(
     snap.gameOver = {
       winner: game.winner,
       termination: game.termination as Termination,
+      // Elo deltas ride along so a RELOADED finished game (which never sees
+      // the live game:over event) can still render the result modal with
+      // rating changes -- otherwise a refreshed game-over page showed a
+      // dead board with no result and no way back to matchmaking.
+      whiteEloBefore: game.whiteEloBefore,
+      blackEloBefore: game.blackEloBefore,
+      whiteEloAfter: game.whiteEloAfter,
+      blackEloAfter: game.blackEloAfter,
     };
   }
   return snap;

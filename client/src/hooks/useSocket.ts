@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getSocket, disconnectSocket, type Socket } from '../socket/socket';
+import { getSocket, releaseSocket, type Socket } from '../socket/socket';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { tryRefresh } from '../api/http';
@@ -93,7 +93,9 @@ export function useSocket(): { status: SocketStatus; socket: Socket | null } {
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
       clearLongDisconnect();
-      disconnectSocket();
+      // Drop this consumer's reference; the shared connection survives as
+      // long as any other consumer (Navbar, the game room) is mounted.
+      releaseSocket();
     };
   }, [token, logout, push]);
 

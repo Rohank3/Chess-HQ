@@ -5,6 +5,7 @@ import { createGame } from '../services/games.js';
 import { gameState } from '../services/game-state.js';
 import { pool } from '../db/pool.js';
 import { roomForGame } from './index.js';
+import { ensureWatchdog } from './game.js';
 import { getSocketIdsForUser } from './lobby.js';
 import { logger } from '../utils/logger.js';
 
@@ -90,6 +91,8 @@ export function registerChallengeHandlers(io: Server, socket: Socket): void {
 
       // Seed the in-memory chess.js instance so the first game:move is O(1).
       gameState.seed(game.id, game.fen);
+      // Clock runs from creation; the timeout watchdog must too.
+      ensureWatchdog(io, game.id, game);
 
       const joinerSummary = { id: joiner.id, username: joiner.username, elo: joiner.elo };
       const creatorSummary = { id: creator.id, username: creator.username, elo: creator.elo };

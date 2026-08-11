@@ -23,29 +23,34 @@ const TERMINATION_LABEL: Record<Termination, string> = {
  */
 export function GameOverModal(): React.JSX.Element | null {
   const { user } = useAuth();
-  const { game, opponent, matchmaking } = useGameContext();
+  const { game, opponent, myColor, leaveGame } = useGameContext();
   const navigate = useNavigate();
   const over = game.gameOver;
   if (!over) return null;
 
+  const isAborted = over.termination === 'aborted';
   const myWon = user && over.winner === user.id;
   const isDraw = over.winner === null;
-  const title = isDraw ? 'Draw' : myWon ? 'Victory' : 'Defeat';
-  const titleColor = isDraw
-    ? 'text-slate-200'
-    : myWon
-      ? 'text-accent-emerald'
-      : 'text-accent-rose';
-  const borderColor = isDraw
-    ? 'border-slate-700'
-    : myWon
-      ? 'border-accent-emerald/40'
-      : 'border-accent-rose/40';
+  const title = isAborted ? 'Game aborted' : isDraw ? 'Draw' : myWon ? 'Victory' : 'Defeat';
+  const titleColor = isAborted
+    ? 'text-slate-300'
+    : isDraw
+      ? 'text-slate-200'
+      : myWon
+        ? 'text-accent-emerald'
+        : 'text-accent-rose';
+  const borderColor = isAborted
+    ? 'border-slate-600'
+    : isDraw
+      ? 'border-slate-700'
+      : myWon
+        ? 'border-accent-emerald/40'
+        : 'border-accent-rose/40';
 
-  // Elo deltas. Show them only for the player's own colour (we know myColor
-  // from the matched context; compare against the white/black before/after
-  // via myColor index).
-  const myColor = matchmaking.match?.color;
+  // Elo deltas, always from the local player's own colour. The context's
+  // myColor is used (not matchmaking.match) so it is correct on deep-linked
+  // / reloaded finished games too, where the matchmaking payload is gone and
+  // the colour came back through the game:subscribe ack.
   const myEloBefore = myColor === 'w' ? over.whiteEloBefore : over.blackEloBefore;
   const myEloAfter = myColor === 'w' ? over.whiteEloAfter : over.blackEloAfter;
   const delta = myEloBefore !== null && myEloAfter !== null ? myEloAfter - myEloBefore : null;
@@ -78,10 +83,10 @@ export function GameOverModal(): React.JSX.Element | null {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/game')}
+            onClick={leaveGame}
             className="flex-1 rounded-lg bg-neon-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-neon-400"
           >
-            New game
+            Back to matchmaking
           </button>
         </div>
       </div>

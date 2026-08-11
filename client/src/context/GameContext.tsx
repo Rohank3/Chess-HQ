@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { useMatchmaking, type UseMatchmakingResult } from '../game/useMatchmaking';
 import { useGame, type UseGameResult } from '../game/useGame';
@@ -48,6 +48,11 @@ interface GameContextValue {
   cancelPromotion: () => void;
   // called by the PromotionDialog once the user picks a piece.
   resolvePromotion: (promotion: 'q' | 'r' | 'b' | 'n') => void;
+  // Explicitly leave the current game and return to the matchmaking hub,
+  // clearing ALL game state. Navigating from /game/:id to /game keeps this
+  // provider mounted (both routes render <Game />), so the state would
+  // otherwise survive the navigation and the old board would linger.
+  leaveGame: () => void;
   // the synchronous handler used by react-chessboard's onPieceDrop. Returns
   // true to accept and keep the piece on the target square, false to snap back.
   submitMove: (args: { piece: { pieceType: string }; sourceSquare: string; targetSquare: string | null }) => boolean;
@@ -101,15 +106,30 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
     seedColor?: CommandColor;
     seedOpponent?: { id: string; username: string; elo: number };
   } | null;
+  // Direct deep-link / page reload at /game/<id>: there is no navigation
+  // state to seed from, so the route param is the game identity. The server
+  // restores colour + opponent through the game:subscribe ack (see below).
+  const { id: routeGameId } = useParams<{ id?: string }>();
 
   // The active game identity. Set when `queue:matched` arrives, when
   // `challenge:accepted` arrives (creator side), or seeded from
-  // location.state (challenge joiner side).
-  const [gameId, setGameId] = useState<string | null>(seed?.seedGameId ?? null);
+  // location.state (challenge joiner side) or the /game/:id route param.
+  const [gameId, setGameId] = useState<string | null>(
+    seed?.seedGameId ?? routeGameId ?? null,
+  );
   const [myColor, setMyColor] = useState<CommandColor | null>(seed?.seedColor ?? null);
   const [opponent, setOpponent] = useState<{ id: string; username: string; elo: number } | null>(
     seed?.seedOpponent ?? null,
   );
+
+  // Adopt the route param when it appears AFTER mount (the component stays
+  // mounted for /game -> /game/:id because both routes render <Game />). The
+  // state initializer only sees the route once, so a late-arriving param
+  // (e.g. ActiveGameWatcher navigating in from the hub) would otherwise be
+  // ignored and the room would never subscribe.
+  useEffect(() => {
+    if (routeGameId) setGameId(routeGameId);
+  }, [routeGameId]);
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [optimisticFen, setOptimisticFen] = useState<string | null>(null);
 
@@ -130,6 +150,14 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       setOpponent(match.opponent);
     }
   }, [queueState, match]);
+
+  // A deep-linked / reloaded room has gameId (route param) but no colour or
+  // opponent yet -- the game:subscribe ack restores both. Adopt them once
+  // they land; don't clobber identity set from a match/challenge.
+  useEffect(() => {
+    if (!myColor && game.color) setMyColor(game.color);
+    if (!opponent && game.opponent) setOpponent(game.opponent);
+  }, [myColor, opponent, game.color, game.opponent]);
 
   // A challenge creator stays on /game while waiting; when an opponent
   // accepts, the server emits `challenge:accepted` shaped like the matched
@@ -187,6 +215,15 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
   }, []);
 
   const cancelPromotion = useCallback(() => setPendingPromotion(null), []);
+
+  const leaveGame = useCallback(() => {
+    setGameId(null);
+    setMyColor(null);
+    setOpponent(null);
+    setOptimisticFen(null);
+    setPendingPromotion(null);
+    navigate('/game', { replace: true });
+  }, [navigate]);
 
   const submitMove: GameContextValue['submitMove'] = useCallback(
     ({ piece, sourceSquare, targetSquare }) => {
@@ -296,6 +333,7 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       resolvePromotion,
       submitMove,
       legalMovesFrom,
+      leaveGame,
       unicodeGlyphs: UNICODE_GLYPHS,
     }),
     [
@@ -310,6 +348,7 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       resolvePromotion,
       submitMove,
       legalMovesFrom,
+      leaveGame,
     ],
   );
 

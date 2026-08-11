@@ -28,6 +28,9 @@ export interface AckOk {
   fen?: string;
   clocks?: ClockState;
   color?: CommandColor;
+  // game:subscribe ack carries the viewer's colour + the opponent summary
+  // so a deep-linked/reloaded room can rebuild its header without navigation state.
+  opponent?: PlayerSummary;
 }
 export interface AckErr {
   ok: false;
@@ -72,7 +75,14 @@ export interface GameSnapshot {
   captured: CapturedDelta;
   clocks: ClockState;
   drawOffer?: { offeredBy: CommandColor; expiresAt: string };
-  gameOver?: { winner: string | null; termination: Termination };
+  gameOver?: {
+    winner: string | null;
+    termination: Termination;
+    whiteEloBefore: number | null;
+    blackEloBefore: number | null;
+    whiteEloAfter: number | null;
+    blackEloAfter: number | null;
+  };
 }
 
 // server/src/sockets/matchmaking.ts:97-112
