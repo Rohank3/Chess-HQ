@@ -71,21 +71,19 @@ async function issueVerificationEmail(
   });
 }
 
-/** Best-effort mail send: a delivery failure must not break the request the
- *  user just made (registration, forgot-password). The dashboard resend
- *  button covers the recovery path. */
-async function sendMailSafe(
-  job: () => Promise<void>,
-  context: string,
-): Promise<void> {
-  try {
-    await job();
-  } catch (err) {
+/** Best-effort, fire-and-forget mail send: a delivery failure must not break
+ *  the request the user just made (registration, forgot-password), and the
+ *  mail's latency must not gate it either — an SMTP round-trip can take
+ *  seconds, and sign-up should respond instantly. The send runs in the
+ *  background (errors are caught here and logged as mail_send_failed); the
+ *  resend button / forgot-password covers a failed delivery. */
+function sendMailSafe(job: () => Promise<void>, context: string): void {
+  job().catch((err) => {
     logger.error('mail_send_failed', {
       context,
       message: err instanceof Error ? err.message : 'unknown',
     });
-  }
+  });
 }
 
 authRouter.post(
@@ -138,7 +136,7 @@ authRouter.post(
       // here: the account is created in a pending state and cannot be used
       // until the emailed link is clicked — verification is a gate on
       // registration, not an afterthought.
-      await sendMailSafe(() => issueVerificationEmail(user.id, email, user.username), 'register');
+      sendMailSafe(() => issueVerificationEmail(user.id, email, user.username), 'register');
       res.status(201).json({ ok: true });
     } catch (err) {
       next(err);
@@ -341,7 +339,7 @@ authRouter.post(
       // Only send to real pending accounts; everyone else gets the uniform
       // success envelope.
       if (user && !user.is_guest && !user.email_verified_at) {
-        await sendMailSafe(
+        sendMailSafe(
           () => issueVerificationEmail(user.id, email, user.username),
           'resend',
         );
@@ -394,7 +392,7 @@ authRouter.post(
         // (that would defeat verification), but do send a nudge to finish
         // verification — the requester already proved they control the
         // address by typing it.
-        await sendMailSafe(
+        sendMailSafe(
           () =>
             sendMail({
               to: email,
@@ -420,7 +418,7 @@ authRouter.post(
          WHERE id = $1`,
         [user.id, hashEmailToken(token)],
       );
-      await sendMailSafe(
+      sendMailSafe(
         () =>
           sendMail({
             to: email,
