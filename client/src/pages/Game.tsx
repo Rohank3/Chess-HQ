@@ -112,6 +112,7 @@ function OpponentFriendButton({
 function GameRoom(): React.JSX.Element {
   const { optimisticFen, gameId, myColor, opponent, game, matchmaking, submitMove, legalMovesFrom } =
     useGameContext();
+  const { user } = useAuth();
   const { push } = useToast();
 
   // A rejected game:subscribe (forbidden / internal error) with no snapshot
@@ -307,7 +308,7 @@ function GameRoom(): React.JSX.Element {
                     {opponent.elo}
                   </span>
                 )}
-                {opponent && <OpponentFriendButton opponent={opponent} />}
+                {opponent && !user?.isGuest && <OpponentFriendButton opponent={opponent} />}
               </div>
             )}
             <div className="flex items-center gap-3">

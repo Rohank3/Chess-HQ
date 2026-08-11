@@ -5,19 +5,31 @@
 # endpoint every 10 minutes keeps the service under that window, so users
 # never hit the ~1 minute cold-start delay.
 #
-# The health URL defaults to the live backend so the workflow works with zero
-# setup. If the service URL ever changes, override it with a repository
-# secret (Settings -> Secrets and variables -> Actions -> New repository
-# secret, name RENDER_HEALTH_URL, value https://<your-service>.onrender.com/api/health)
+# IMPORTANT — GitHub throttles scheduled workflows. `schedule` events are
+# queued and only run "when resources are available", which on a free plan
+# commonly means 30-60+ minutes late (or skipped) instead of on time. If the
+# pings land further apart than Render's 15-minute idle window, the service
+# still spins down between pings and users hit the cold start this workflow
+# exists to prevent. That is GitHub-side queueing, not a bug in the job —
+# there is no repository-side fix.
+#
+# The reliable fix is an external uptime monitor, which pings on a real
+# timer outside GitHub. Free options:
+#   - UptimeRobot (https://uptimerobot.com): create a monitor with
+#     Monitor Type = HTTPS, URL = https://chess-server-c1d3.onrender.com/api/health,
+#     Interval = 5 minutes. It also alerts you if the site goes down.
+#   - cron-job.org: same idea, 1-minute intervals on the free tier.
+#
+# If the service URL ever changes, override it with a repository secret
+# (Settings -> Secrets and variables -> Actions -> New repository secret,
+# name RENDER_HEALTH_URL, value https://<your-service>.onrender.com/api/health)
 # rather than editing this file.
 #
-# Notes:
-#   - GitHub pauses scheduled workflows on private repositories with no
-#     activity for 60 days. If that happens (or you want a no-code option),
-#     create a free UptimeRobot monitor for the same URL with a 5-minute
-#     interval instead.
-#   - Budget: ~432 runs/month. On a private repo that's ~430 of your 2,000
-#     free Actions minutes; on a public repo Actions is free.
+# The retry budget below is deliberately generous: Render free tier cold
+# starts take ~60-90 seconds, and the first request into a sleeping instance
+# can hang until then. max-time 90 + 6 retries (15s apart) covers that
+# window, so the pings that DO run actually wake the service instead of
+# failing against the cold-start queue.
 
 name: Keep Render awake
 
@@ -34,19 +46,17 @@ jobs:
   ping:
     name: Ping Render /api/health
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 15
     steps:
       - name: GET health endpoint
         env:
           HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL || 'https://chess-server-c1d3.onrender.com/api/health' }}
         run: |
           curl -fsS \
-            --max-time 60 \
-            --retry 3 \
-            --retry-delay 5 \
+            --max-time 90 \
+            --retry 6 \
+            --retry-delay 15 \
             --retry-all-errors \
             -o /dev/null \
             -w "health check: HTTP %{http_code}\n" \
             "$HEALTH_URL"
-        # The retries absorb the ~1 minute cold start if Render ever does
-        # spin down despite the pings (e.g. after a GitHub cron pause).

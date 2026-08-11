@@ -8,10 +8,25 @@ import { MatchHistoryTable } from '../components/MatchHistoryTable';
 import { FriendsSection } from '../components/FriendsSection';
 import { IncomingChallengesSection } from '../components/IncomingChallengesSection';
 
+/**
+ * The friends + incoming-challenges grid. Rendered only for registered users
+ * (guests get no friend feature at all), so the useFriends hook — which
+ * fetches /api/friends and polls it every 30s — only ever mounts for
+ * accounts that can actually use it.
+ */
+function FriendsPanels(): React.JSX.Element {
+  const friends = useFriends();
+  return (
+    <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <IncomingChallengesSection friends={friends} />
+      <FriendsSection friends={friends} />
+    </section>
+  );
+}
+
 export function Dashboard(): React.JSX.Element {
   const { user, loading } = useAuth();
   const { data, error, refresh } = useStats();
-  const friends = useFriends();
 
   if (loading) {
     return <Spinner label="Loading your dashboard…" />;
@@ -86,12 +101,7 @@ export function Dashboard(): React.JSX.Element {
       </section>
 
       {/* Friends + incoming challenges (registered users only) ---------- */}
-      {!user.isGuest && (
-        <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <IncomingChallengesSection friends={friends} />
-          <FriendsSection friends={friends} />
-        </section>
-      )}
+      {!user.isGuest && <FriendsPanels />}
 
       {/* Stats + history grid -------------------------------------------- */}
       {error && !data ? (
