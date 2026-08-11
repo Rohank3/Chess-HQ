@@ -59,16 +59,23 @@ const schema = z.object({
   // Resend's REST API (free tier: 3,000 emails/month, 100/day) and requires
   // RESEND_API_KEY — but note the shared onboarding@resend.dev sender can
   // only deliver to the Resend account's own inbox; sending to arbitrary
-  // recipients requires a verified domain. `smtp` sends via any SMTP server
-  // (e.g. Gmail: smtp.gmail.com + an App Password) and requires SMTP_HOST /
-  // SMTP_USER / SMTP_PASS.
-  EMAIL_PROVIDER: z.enum(['none', 'resend', 'smtp']).default('none'),
+  // recipients requires a verified domain. `brevo` sends via Brevo's REST
+  // API (free tier: 300 emails/day) and requires BREVO_API_KEY — a single
+  // verified sender email works without owning a domain. `smtp` sends via
+  // any SMTP server (e.g. Gmail: smtp.gmail.com + an App Password) and
+  // requires SMTP_HOST / SMTP_USER / SMTP_PASS.
+  EMAIL_PROVIDER: z.enum(['none', 'resend', 'brevo', 'smtp']).default('none'),
   // The From address on every message. With Resend's free tier this must be
   // `onboarding@resend.dev` until you verify your own domain (then e.g.
   // `Chess-HQ <no-reply@yourdomain.com>`). With SMTP it should be the
   // mailbox you authenticate as (or an alias it may send from).
   EMAIL_FROM: z.string().default('Chess-HQ <onboarding@resend.dev>'),
   RESEND_API_KEY: z.string().optional(),
+  // Brevo provider (EMAIL_PROVIDER=brevo). Free tier: 300 emails/day, no
+  // domain required. Key from Brevo → Settings → SMTP & API → API keys
+  // (starts with xkeysib-); EMAIL_FROM must be a sender verified in Brevo
+  // (6-digit email code).
+  BREVO_API_KEY: z.string().optional(),
   // SMTP provider (EMAIL_PROVIDER=smtp). Gmail: SMTP_HOST=smtp.gmail.com,
   // SMTP_PORT=465, SMTP_SECURE=true (or 587 + false for STARTTLS), user =
   // the Gmail address, pass = a 16-char App Password (Google account →

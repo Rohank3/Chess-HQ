@@ -174,6 +174,11 @@ if (isProduction && env.EMAIL_PROVIDER === 'none') {
     ...mailConfig,
     hint: 'EMAIL_PROVIDER=smtp but SMTP_HOST/SMTP_USER/SMTP_PASS are incomplete — sends will fail.',
   });
+} else if (env.EMAIL_PROVIDER === 'brevo' && !env.BREVO_API_KEY) {
+  logger.warn('mail_config', {
+    ...mailConfig,
+    hint: 'EMAIL_PROVIDER=brevo but BREVO_API_KEY is missing — sends will fail.',
+  });
 } else {
   logger.info('mail_config', mailConfig);
 }
@@ -182,9 +187,9 @@ if (isProduction && env.EMAIL_PROVIDER === 'none') {
 // WITHOUT sending a message to a real recipient, so a broken path (wrong
 // credentials, blocked egress, IPv6-only resolution on Render's IPv4-only
 // network) shows up in the boot logs as `mail_smtp_check` /
-// `mail_resend_check` { ok:false } within seconds, instead of surfacing
-// later as a silent no-show after someone registers. Fire-and-forget: a
-// failed check must not crash or delay the server.
+// `mail_resend_check` / `mail_brevo_check` { ok:false } within seconds,
+// instead of surfacing later as a silent no-show after someone registers.
+// Fire-and-forget: a failed check must not crash or delay the server.
 const smtpHost = env.SMTP_HOST;
 if (
   env.EMAIL_PROVIDER === 'smtp' &&
@@ -236,6 +241,33 @@ if (
       }
     } catch (err) {
       logger.error('mail_resend_check', {
+        ...config,
+        ok: false,
+        message: err instanceof Error ? err.message : 'unknown',
+      });
+    }
+  })();
+} else if (env.EMAIL_PROVIDER === 'brevo' && env.BREVO_API_KEY) {
+  const brevoApiKey = env.BREVO_API_KEY;
+  void (async () => {
+    const config: Record<string, unknown> = { ...mailConfig };
+    try {
+      // Key-validity check only — nothing is sent. GET /v3/account returns
+      // 200 for a valid API key and 401 otherwise.
+      const res = await fetch('https://api.brevo.com/v3/account', {
+        headers: { 'api-key': brevoApiKey, Accept: 'application/json' },
+      });
+      if (res.ok) {
+        logger.info('mail_brevo_check', { ...config, ok: true, status: res.status });
+      } else {
+        logger.error('mail_brevo_check', {
+          ...config,
+          ok: false,
+          status: res.status,
+        });
+      }
+    } catch (err) {
+      logger.error('mail_brevo_check', {
         ...config,
         ok: false,
         message: err instanceof Error ? err.message : 'unknown',

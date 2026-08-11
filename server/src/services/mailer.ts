@@ -51,6 +51,10 @@ export function createSmtpTransportFromEnv(): Transporter {
  *     API key. Free tier is 3,000 emails/month, 100/day. Note the shared
  *     onboarding@resend.dev sender can only deliver to the Resend account's
  *     own inbox — sending to arbitrary recipients needs a verified domain.
+ *   - `brevo` (production): POSTs to Brevo's REST API (free tier: 300
+ *     emails/day) with the configured API key. A single verified sender
+ *     email is enough — no domain required — so this is the free path that
+ *     reaches any recipient when SMTP egress is blocked (e.g. Render).
  *   - `smtp` (production): sends through any SMTP server (Gmail + an App
  *     Password is the zero-cost path; ~500 emails/day).
  *
@@ -90,6 +94,12 @@ export async function sendMail(message: MailMessage): Promise<void> {
     return;
   }
 
+  if (env.EMAIL_PROVIDER === 'brevo') {
+    await sendViaBrevo(message);
+    logger.info('mail_sent', { to: message.to, subject: message.subject });
+    return;
+  }
+
   if (env.EMAIL_PROVIDER === 'smtp') {
     await sendViaSmtp(message);
     logger.info('mail_sent', { to: message.to, subject: message.subject });
@@ -122,6 +132,52 @@ async function sendViaResend(message: MailMessage): Promise<void> {
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Resend API error ${res.status}: ${body.slice(0, 500)}`);
+  }
+}
+
+/** Split `Name <email>` (or a bare `email`) into Brevo's sender object.
+ *  EMAIL_FROM is authored in RFC-822 display-name form; Brevo wants the two
+ *  halves separated. */
+function parseSender(from: string): { name?: string; email: string } {
+  const m = /^(.*?)\s*<([^>]+)>$/.exec(from.trim());
+  if (m) {
+    const name = m[1]!.trim();
+    return name ? { name, email: m[2]! } : { email: m[2]! };
+  }
+  return { email: from.trim() };
+}
+
+/** Send via Brevo's REST API (never SMTP — the whole point is escaping
+ *  blocked SMTP egress; HTTPS 443 always works). `apiKey` is injectable for
+ *  hermetic tests; production reads BREVO_API_KEY from env and rejects
+ *  loudly when it's missing, mirroring the Resend/SMTP paths. The sender
+ *  (EMAIL_FROM) must be a sender the user verified in Brevo with the
+ *  6-digit email code — otherwise Brevo answers 4xx and the body names it. */
+export async function sendViaBrevo(message: MailMessage, apiKey?: string): Promise<void> {
+  const key = apiKey ?? env.BREVO_API_KEY;
+  if (!key) {
+    throw new Error(
+      'EMAIL_PROVIDER=brevo requires BREVO_API_KEY (get one at brevo.com → Settings → SMTP & API → API keys)',
+    );
+  }
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': key,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: parseSender(env.EMAIL_FROM),
+      to: [{ email: message.to }],
+      subject: message.subject,
+      textContent: message.text,
+      ...(message.html ? { htmlContent: message.html } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo API error ${res.status}: ${body.slice(0, 500)}`);
   }
 }
 

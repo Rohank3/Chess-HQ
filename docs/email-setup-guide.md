@@ -13,12 +13,16 @@ Email is **off by default**: with `EMAIL_PROVIDER=none` (the dev default),
 the server just logs every message — including the full link — to its
 console, so nothing is actually sent until you configure a provider.
 
-Two providers are built in:
+Three providers are built in:
 
 - **[Resend](https://resend.com)** (recommended) — free tier is 3,000
   emails/month and 100/day. ⚠️ The shared `onboarding@resend.dev` sender
   **can only deliver to the email address you registered Resend with**;
   sending to real users requires verifying your own domain (section 3).
+- **[Brevo](https://www.brevo.com)** — free tier is 300 emails/day and
+  works **without a domain**: verify a single sender email address with a
+  6-digit code, then send to any recipient over Brevo's HTTPS API. The
+  free path to use when SMTP egress is blocked (Render). Section 2b.
 - **SMTP** — no domain needed; use your personal Gmail (or any SMTP
   server) as the sending account. Section 5.
 
@@ -52,6 +56,36 @@ EMAIL_FROM=Chess-HQ <onboarding@resend.dev>
   "success" either way (anti-enumeration), so the failure only shows in the
   server logs as `mail_send_failed … Resend API error 403`.
 - After changing env vars on Render, **Deploy** so the new values take effect.
+
+## 2b. Alternative: Brevo — free, no domain needed
+
+Brevo's free plan (300 emails/day) can send to **any** recipient with just
+a verified sender *email address* — no domain, no DNS records:
+
+1. Sign up at https://www.brevo.com (free). You'll confirm your email and
+   possibly a phone number.
+2. **Settings → Senders & IPs → Senders → Add a sender** — enter the
+   address you want mail to come from (e.g. your Gmail). Brevo emails a
+   6-digit code to it; enter the code to verify the sender.
+3. **Settings → SMTP & API → API keys** → **Generate a new API key** (it
+   looks like `xkeysib-...`).
+4. Add these env vars to **Render** (and `server/.env` for local testing):
+
+   ```env
+   EMAIL_PROVIDER=brevo
+   BREVO_API_KEY=xkeysib-xxxxxxxxxxxx
+   EMAIL_FROM=Chess-HQ <yourname@gmail.com>
+   ```
+
+   `EMAIL_FROM` must be exactly the sender you verified in step 2.
+5. **Deploy**. The boot logs show `mail_brevo_check` with `"ok":true` once
+   the key is accepted (a key-validity check that sends nothing).
+
+Caveats without a verified domain: Gmail/Yahoo may route the mail to
+spam/Other (the link still works), and Brevo may rewrite the envelope
+sender to comply with bulk-sender rules. If deliverability starts to
+matter, the upgrade is authenticating any domain you own (DNS records are
+free) — see section 3.
 
 ## 3. Verify your own domain (required before real users get mail)
 
@@ -163,10 +197,11 @@ After redeploying, the **boot logs** verify the mail path by themselves:
 If `mail_smtp_check` reports `ok:false` with a timeout / ENETUNREACH even on
 the fixed build, SMTP egress is blocked from Render's network: on the free
 tier both Gmail ports (465 and 587) were observed timing out while the IPv6
-fallback dies instantly — no SMTP host or port will fix that. Switch to the
-**Resend provider** (section 2), which sends over plain HTTPS (port 443) and
-is never blocked. With `EMAIL_PROVIDER=resend`, the boot logs instead show
-`mail_resend_check` — a key-validity check that sends nothing.
+fallback dies instantly — no SMTP host or port will fix that. Switch to an
+HTTP-API provider, which goes out over plain HTTPS (port 443) and is never
+blocked: **Brevo** (section 2b — free, no domain needed) or **Resend**
+(section 2). The boot logs then show `mail_brevo_check` / `mail_resend_check`
+— key-validity checks that send nothing.
 
 ### SMTP trade-offs vs a verified Resend domain
 
