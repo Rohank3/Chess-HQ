@@ -5,20 +5,13 @@
 # endpoint every 10 minutes keeps the service under that window, so users
 # never hit the ~1 minute cold-start delay.
 #
-# Setup (one-time, ~2 minutes):
-#   1. Deploy the backend to Render and copy the service URL, e.g.
-#      https://chess-server-abc123.onrender.com
-#   2. In your GitHub repo: Settings -> Secrets and variables -> Actions ->
-#      New repository secret:
-#        Name:  RENDER_HEALTH_URL
-#        Value: https://chess-server-abc123.onrender.com/api/health
-#   3. Push this file to the default branch. The workflow starts firing on
-#      the next scheduled run (cron times are UTC).
+# The health URL defaults to the live backend so the workflow works with zero
+# setup. If the service URL ever changes, override it with a repository
+# secret (Settings -> Secrets and variables -> Actions -> New repository
+# secret, name RENDER_HEALTH_URL, value https://<your-service>.onrender.com/api/health)
+# rather than editing this file.
 #
 # Notes:
-#   - The URL lives in a repository secret so the backend address is not
-#     hardcoded in the repo (it also lets you rename the service later
-#     without a commit).
 #   - GitHub pauses scheduled workflows on private repositories with no
 #     activity for 60 days. If that happens (or you want a no-code option),
 #     create a free UptimeRobot monitor for the same URL with a 5-minute
@@ -44,6 +37,8 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: GET health endpoint
+        env:
+          HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL || 'https://chess-server-c1d3.onrender.com/api/health' }}
         run: |
           curl -fsS \
             --max-time 60 \
@@ -52,6 +47,6 @@ jobs:
             --retry-all-errors \
             -o /dev/null \
             -w "health check: HTTP %{http_code}\n" \
-            "${{ secrets.RENDER_HEALTH_URL }}"
+            "$HEALTH_URL"
         # The retries absorb the ~1 minute cold start if Render ever does
         # spin down despite the pings (e.g. after a GitHub cron pause).

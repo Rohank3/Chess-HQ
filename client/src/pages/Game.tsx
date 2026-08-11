@@ -17,6 +17,29 @@ const SELECTED_BG = 'rgba(34, 211, 238, 0.32)';
 const MOVE_TARGET_BG = 'rgba(16, 185, 129, 0.25)';
 const CAPTURE_TARGET_BG = 'rgba(244, 63, 94, 0.30)';
 
+/**
+ * Returns the FEN piece character on a square (uppercase = white, lowercase =
+ * black), or '' for an empty square. Click-to-move needs it because
+ * onPieceClick only reports the clicked square, while submitMove wants the
+ * moving piece's type (to detect promotions).
+ */
+function pieceTypeAt(fen: string, square: string): string {
+  const file = square.charCodeAt(0) - 97;
+  const rank = 8 - Number(square[1]);
+  const row = fen.split(' ')[0]!.split('/')[rank];
+  if (!row) return '';
+  let idx = 0;
+  for (const ch of row) {
+    if (ch >= '1' && ch <= '8') {
+      idx += Number(ch);
+    } else {
+      if (idx === file) return ch;
+      idx += 1;
+    }
+  }
+  return '';
+}
+
 function GameRoom(): React.JSX.Element {
   const { optimisticFen, gameId, myColor, opponent, game, matchmaking, submitMove, legalMovesFrom } =
     useGameContext();
@@ -47,9 +70,11 @@ function GameRoom(): React.JSX.Element {
     isGameOver,
   });
 
-  // --- Legal-move highlighting ----------------------------------------------
+  // --- Legal-move highlighting + click-to-move -------------------------------
   // Clicking one of my pieces lights up every square it can legally move to
-  // (green tint for quiet moves, rose ring for captures).
+  // (green tint for quiet moves, rose ring for captures). With a piece
+  // selected, clicking one of those highlighted targets makes the move — drag
+  // still works too. Clicking the selected piece again deselects it.
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [legalTargets, setLegalTargets] = useState<Record<string, boolean>>({});
 
@@ -67,6 +92,25 @@ function GameRoom(): React.JSX.Element {
         setLegalTargets({});
         return;
       }
+      // Click-to-move: with a piece selected, clicking one of its highlighted
+      // targets submits the move. The piece type is read off the rendered FEN;
+      // promotion is caught by submitMove (opens the dialog, no snap-back).
+      if (selectedSquare && legalTargets[square]) {
+        submitMove({
+          piece: { pieceType: pieceTypeAt(position, selectedSquare) },
+          sourceSquare: selectedSquare,
+          targetSquare: square,
+        });
+        setSelectedSquare(null);
+        setLegalTargets({});
+        return;
+      }
+      // Clicking the selected piece again deselects it.
+      if (selectedSquare === square) {
+        setSelectedSquare(null);
+        setLegalTargets({});
+        return;
+      }
       const moves = legalMovesFrom(square);
       if (moves.length === 0) {
         setSelectedSquare(null);
@@ -78,7 +122,7 @@ function GameRoom(): React.JSX.Element {
       for (const m of moves) targets[m.to] = m.isCapture;
       setLegalTargets(targets);
     },
-    [snapshot, isGameOver, myColor, legalMovesFrom],
+    [snapshot, isGameOver, myColor, legalMovesFrom, position, selectedSquare, legalTargets, submitMove],
   );
 
   const squareStyles = useMemo<Record<string, React.CSSProperties>>(() => {

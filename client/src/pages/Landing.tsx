@@ -2,11 +2,10 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { ChessPiece3D } from '../components/ChessPiece3D';
 import { PieceScene } from '../components/PieceScene';
 
-// WebGL gate: the hero's 3D piece scene needs a GL context; ancient or
-// headless environments fall back to the flat SVG cluster.
+// WebGL gate: the hero's 3D piece scene needs a GL context. Ancient or
+// headless environments just get the empty board backdrop behind the copy.
 const supportsWebGL = typeof WebGLRenderingContext !== 'undefined';
 
 interface SubmitError {
@@ -109,7 +108,7 @@ function BackgroundBoard(): React.JSX.Element {
 
   return (
     <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden>
-      {/* Faint purplish wash (matches the cluster's mood, no blue) */}
+      {/* Faint purplish wash (no blue) */}
       <div className="absolute inset-0 bg-[radial-gradient(55rem_55rem_at_75%_10%,rgba(139,92,246,0.13),transparent_62%)]" />
 
       {/* The board itself */}
@@ -138,81 +137,6 @@ function BackgroundBoard(): React.JSX.Element {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-interface ClusterPiece {
-  type: 'king' | 'queen' | 'knight' | 'pawn';
-  light: boolean;
-  left: string;
-  top: string;
-  width: number;
-  z: number;
-  /** 0 = standing; nonzero tips the piece over (lying down). */
-  rotate?: number;
-}
-
-/**
- * Four large glossy 3D chess pieces clustered in the foreground, inspired
- * by a product-shot arrangement: king and queen standing behind, knight
- * and a fallen pawn in front. Soft blurred contact shadows ground each
- * piece; the pieces themselves are shaded SVG (see ChessPiece3D).
- */
-function PieceCluster(): React.JSX.Element {
-  // Ground line: every standing piece's base sits at ~88% of the container
-  // height (CSS calc keeps this correct at every breakpoint).
-  const pieces: ReadonlyArray<ClusterPiece> = [
-    { type: 'queen', light: false, left: '44%', top: 'calc(88% - 190px)', width: 158, z: 20 },
-    { type: 'king', light: true, left: '10%', top: 'calc(88% - 216px)', width: 180, z: 30 },
-    { type: 'knight', light: true, left: '58%', top: 'calc(88% - 154px)', width: 128, z: 40 },
-    { type: 'pawn', light: true, left: '38%', top: '70%', width: 96, z: 50, rotate: 76 },
-  ];
-
-  // Soft contact shadows, one per piece (roughly under its base).
-  const shadows: ReadonlyArray<{ left: string; top: string; w: number; h: number }> = [
-    { left: '16%', top: '86%', w: 148, h: 28 },
-    { left: '49%', top: '86%', w: 132, h: 26 },
-    { left: '61%', top: '90%', w: 104, h: 22 },
-    { left: '36%', top: '93%', w: 84, h: 18 },
-  ];
-
-  return (
-    <div
-      className="relative mx-auto h-[440px] w-full max-w-[560px] select-none sm:h-[520px]"
-      aria-hidden
-    >
-      {shadows.map((s, i) => (
-        <div
-          key={`shadow-${i}`}
-          className="absolute rounded-[50%] bg-slate-950/80 blur-md"
-          style={{ left: s.left, top: s.top, width: s.w, height: s.h }}
-        />
-      ))}
-
-      {pieces.map((p, i) => (
-        <div
-          key={`${p.type}-${i}`}
-          className="absolute animate-float"
-          style={{
-            left: p.left,
-            top: p.top,
-            zIndex: p.z,
-            // Stagger the bob so the cluster feels alive, not mechanical.
-            animationDelay: `${i * 0.7}s`,
-          }}
-        >
-          <div
-            style={{
-              transform: p.rotate ? `rotate(${p.rotate}deg)` : undefined,
-              transformOrigin: '50% 88%',
-              filter: 'drop-shadow(0 18px 28px rgba(2,6,23,0.5))',
-            }}
-          >
-            <ChessPiece3D type={p.type} light={p.light} width={p.width} />
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -326,7 +250,7 @@ export function Landing(): React.JSX.Element {
           </div>
         </div>
 
-        {supportsWebGL ? <PieceScene /> : <PieceCluster />}
+        {supportsWebGL && <PieceScene />}
       </section>
 
       {/* Features */}

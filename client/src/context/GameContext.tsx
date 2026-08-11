@@ -12,6 +12,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { useMatchmaking, type UseMatchmakingResult } from '../game/useMatchmaking';
 import { useGame, type UseGameResult } from '../game/useGame';
+import { useActivity } from './ActivityContext';
 import { useSocket } from '../hooks/useSocket';
 import type {
   ChallengeAcceptedPayload,
@@ -92,8 +93,9 @@ const GameContext = createContext<GameContextValue | null>(null);
  */
 export function GameProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const matchmaking = useMatchmaking();
-  const { queueState, match } = matchmaking;
+  const { queueState, match, reset: resetMatchmaking } = matchmaking;
   const { socket } = useSocket();
+  const { setInGame, setSearching } = useActivity();
   const navigate = useNavigate();
 
   // A challenge joiner arrives via /challenge/:id and navigates here with
@@ -140,6 +142,22 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
   const authoritativeRef = useRef<Chess | null>(null);
 
   const game = useGame({ gameId });
+
+  // Report queue-search state app-wide so the Navbar badge can pulse while
+  // the player is in the matchmaking queue. Cleared on unmount so the badge
+  // never lingers after leaving the /game routes.
+  useEffect(() => {
+    setSearching(queueState === 'searching');
+    return () => setSearching(false);
+  }, [queueState, setSearching]);
+
+  // Report a live game app-wide. A freshly matched room (gameId set, snapshot
+  // still loading) counts as in-game; a finished game does not.
+  const isGameOver = !!game.gameOver || !!game.snapshot?.gameOver;
+  useEffect(() => {
+    setInGame(gameId !== null && !isGameOver);
+    return () => setInGame(false);
+  }, [gameId, isGameOver, setInGame]);
 
   // When the matchmaking layer transitions to 'matched', adopt the matched
   // gameId + color + opponent.
@@ -217,13 +235,18 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
   const cancelPromotion = useCallback(() => setPendingPromotion(null), []);
 
   const leaveGame = useCallback(() => {
+    // Reset the matchmaking state too: after a match the queue is stuck in
+    // 'matched', and the hub condition (`queueState !== 'matched'`) would
+    // otherwise fail — the user would land back on a dead board and need a
+    // full page refresh to see the matchmaking hub again.
+    resetMatchmaking();
     setGameId(null);
     setMyColor(null);
     setOpponent(null);
     setOptimisticFen(null);
     setPendingPromotion(null);
     navigate('/game', { replace: true });
-  }, [navigate]);
+  }, [navigate, resetMatchmaking]);
 
   const submitMove: GameContextValue['submitMove'] = useCallback(
     ({ piece, sourceSquare, targetSquare }) => {

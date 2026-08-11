@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useActivity } from '../context/ActivityContext';
 import { useSocket } from '../hooks/useSocket';
 import { STATUS_LABEL, STATUS_STYLES, statusDotClass } from './connectionStyles';
 
@@ -13,10 +14,14 @@ import { STATUS_LABEL, STATUS_STYLES, statusDotClass } from './connectionStyles'
 export function Navbar(): React.JSX.Element | null {
   const { user, logout } = useAuth();
   const { status } = useSocket();
+  const { inGame, searching } = useActivity();
 
   if (!user) return null;
 
   const guestSuffix = user.isGuest ? ' (guest)' : '';
+  const activityLabel = searching
+    ? 'Searching the matchmaking queue'
+    : 'You are in an active game';
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
@@ -38,6 +43,20 @@ export function Navbar(): React.JSX.Element | null {
             <span className={`size-1.5 rounded-full ${statusDotClass(status)}`} aria-hidden />
             {STATUS_LABEL[status]}
           </span>
+
+          {(inGame || searching) && (
+            <span
+              className="hidden items-center gap-1.5 rounded-full border border-neon-500/40 bg-neon-500/10 px-2.5 py-1 text-xs font-medium text-neon-400 sm:inline-flex"
+              title={activityLabel}
+              aria-label={activityLabel}
+            >
+              <span className="relative flex size-1.5" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-400 opacity-75" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-neon-400" />
+              </span>
+              {searching ? 'Searching' : 'In game'}
+            </span>
+          )}
 
           <Link
             to="/game"
