@@ -1,4 +1,4 @@
-import { env, isTest } from '../config/env.js';
+import { env, isProduction, isTest } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
 export interface MailMessage {
@@ -26,6 +26,20 @@ export interface MailMessage {
  */
 export async function sendMail(message: MailMessage): Promise<void> {
   if (isTest || env.EMAIL_PROVIDER === 'none') {
+    // Dev/test: log the full message as a stand-in for a real mailbox so
+    // the flow is click-through-able locally with zero setup.
+    //
+    // The body carries one-time tokens, so it is never logged outside dev:
+    // if production ever runs without a provider, warn loudly but do NOT
+    // dump the link into the logs.
+    if (isProduction) {
+      logger.error('mail_not_configured', {
+        to: message.to,
+        subject: message.subject,
+        hint: 'EMAIL_PROVIDER=none in production: no email was sent and the verification link is unavailable. Set EMAIL_PROVIDER=resend and RESEND_API_KEY.',
+      });
+      return;
+    }
     logger.info('mail_dev_send', {
       to: message.to,
       subject: message.subject,
@@ -36,6 +50,12 @@ export async function sendMail(message: MailMessage): Promise<void> {
 
   if (env.EMAIL_PROVIDER === 'resend') {
     await sendViaResend(message);
+    // Success is logged explicitly so the server logs tell the full story:
+    // mail_dev_send = dev mode (no real send), mail_sent = Resend accepted
+    // it, mail_send_failed = the API rejected it (bad key / unverified
+    // Resend account / daily cap). Without this a silent success looked
+    // identical to a no-op.
+    logger.info('mail_sent', { to: message.to, subject: message.subject });
     return;
   }
 
