@@ -75,6 +75,12 @@ function GameRoom(): React.JSX.Element {
   // (green tint for quiet moves, rose ring for captures). With a piece
   // selected, clicking one of those highlighted targets makes the move — drag
   // still works too. Clicking the selected piece again deselects it.
+  //
+  // This is wired to onSquareClick (not onPieceClick): react-chessboard only
+  // fires onPieceClick when the clicked square holds a piece, so a click on an
+  // empty target square would never submit the move. The piece's own click
+  // bubbles up to its square, so one handler covers both cases with a single
+  // code path.
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [legalTargets, setLegalTargets] = useState<Record<string, boolean>>({});
 
@@ -83,7 +89,7 @@ function GameRoom(): React.JSX.Element {
     setLegalTargets({});
   }, [snapshot]);
 
-  const handlePieceClick = useCallback(
+  const handleSquareClick = useCallback(
     ({ square }: { square: string | null }) => {
       if (!square) return;
       const myTurn = snapshot?.turn === myColor;
@@ -95,7 +101,9 @@ function GameRoom(): React.JSX.Element {
       // Click-to-move: with a piece selected, clicking one of its highlighted
       // targets submits the move. The piece type is read off the rendered FEN;
       // promotion is caught by submitMove (opens the dialog, no snap-back).
-      if (selectedSquare && legalTargets[square]) {
+      // Note: the map values are `isCapture`, which is false for quiet moves,
+      // so test key presence, not truthiness.
+      if (selectedSquare && Object.hasOwn(legalTargets, square)) {
         submitMove({
           piece: { pieceType: pieceTypeAt(position, selectedSquare) },
           sourceSquare: selectedSquare,
@@ -214,7 +222,7 @@ function GameRoom(): React.JSX.Element {
                 id: 'game-room',
                 position,
                 onPieceDrop: submitMove,
-                onPieceClick: handlePieceClick,
+                onSquareClick: handleSquareClick,
                 boardOrientation: orientation,
                 allowDragging: canDrag,
                 allowDrawingArrows: !isGameOver,
