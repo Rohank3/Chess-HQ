@@ -138,6 +138,36 @@ createSocketLayer(io);
 // the process so Render surfaces it instead of serving errors.
 await runMigrations();
 
+// Surface the resolved outbound-mail config at boot (never the SMTP
+// password). EMAIL_PROVIDER defaults to `none`, which logs messages instead
+// of sending — so a production deploy with SMTP_* set but no provider is the
+// classic "no emails arrive" trap, and a boot line makes it obvious in the
+// Render logs instead of a silent sign-up.
+const mailConfig = {
+  provider: env.EMAIL_PROVIDER,
+  from: env.EMAIL_FROM,
+  smtpHost: env.SMTP_HOST,
+  smtpPort: env.SMTP_PORT,
+  smtpSecure: env.SMTP_SECURE,
+  smtpUser: env.SMTP_USER,
+};
+if (isProduction && env.EMAIL_PROVIDER === 'none') {
+  logger.warn('mail_config', {
+    ...mailConfig,
+    hint: 'EMAIL_PROVIDER=none in production: verification/reset emails are NOT being sent. Set EMAIL_PROVIDER=smtp (with SMTP_*) or resend.',
+  });
+} else if (
+  env.EMAIL_PROVIDER === 'smtp' &&
+  (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS)
+) {
+  logger.warn('mail_config', {
+    ...mailConfig,
+    hint: 'EMAIL_PROVIDER=smtp but SMTP_HOST/SMTP_USER/SMTP_PASS are incomplete — sends will fail.',
+  });
+} else {
+  logger.info('mail_config', mailConfig);
+}
+
 httpServer.listen(env.PORT, () => {
   logger.info('server_listening', { port: env.PORT, env: env.NODE_ENV });
 });
