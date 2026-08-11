@@ -13,9 +13,14 @@ Email is **off by default**: with `EMAIL_PROVIDER=none` (the dev default),
 the server just logs every message — including the full link — to its
 console, so nothing is actually sent until you configure a provider.
 
-**Recommended provider: [Resend](https://resend.com)** — free tier is
-3,000 emails/month and 100/day, which is far more than a hobby chess app
-needs. Everything below uses Resend.
+Two providers are built in:
+
+- **[Resend](https://resend.com)** (recommended) — free tier is 3,000
+  emails/month and 100/day. ⚠️ The shared `onboarding@resend.dev` sender
+  **can only deliver to the email address you registered Resend with**;
+  sending to real users requires verifying your own domain (section 3).
+- **SMTP** — no domain needed; use your personal Gmail (or any SMTP
+  server) as the sending account. Section 5.
 
 ---
 
@@ -39,15 +44,19 @@ EMAIL_FROM=Chess-HQ <onboarding@resend.dev>
 ```
 
 - `EMAIL_FROM` must be `onboarding@resend.dev` **until** you verify your own
-  domain in Resend (step 3). The display name in front (`Chess-HQ`) is free
-  to change.
-- After changing env vars on Render, **Deploy** (or the service auto-restarts)
-  so the new values take effect.
+  domain in Resend (section 3). The display name in front (`Chess-HQ`) is
+  free to change.
+- **This only ever sends mail to your own inbox.** `onboarding@resend.dev`
+  is Resend's testing sender — it delivers to the address on your Resend
+  account and silently rejects every other recipient. The app reports
+  "success" either way (anti-enumeration), so the failure only shows in the
+  server logs as `mail_send_failed … Resend API error 403`.
+- After changing env vars on Render, **Deploy** so the new values take effect.
 
-## 3. (Recommended) Verify your own domain for delivery reliability
+## 3. Verify your own domain (required before real users get mail)
 
-Emails from `onboarding@resend.dev` deliver, but Gmail/Outlook may filter
-them more aggressively than mail from your own domain.
+Because of the restriction above, you must add a domain before the app can
+email anyone other than you:
 
 1. Resend → **Domains** → **Add Domain**, enter the domain you own (e.g.
    `chesshq.com`).
@@ -55,6 +64,8 @@ them more aggressively than mail from your own domain.
    record) at your DNS provider. SPF + DKIM are what make Gmail trust you.
 3. Wait for the domain status to become **Verified** (minutes to a few hours).
 4. Set `EMAIL_FROM=Chess-HQ <no-reply@yourdomain.com>` and redeploy.
+
+No domain? Skip straight to **section 5** — SMTP needs none.
 
 ## 4. Verify it works
 
@@ -91,9 +102,51 @@ needed, nothing leaves your machine.
 - If you ever do: resend is rate-limited server-side (3/60s per user, 5/min
   per IP for forgot-password), so a stray script can't burn the quota.
 
+## 5. Alternative: SMTP (no domain needed)
+
+Use any SMTP server as the sender — your personal **Gmail** is the
+zero-cost option (~500 emails/day, plenty for verification + resets).
+
+### Gmail setup
+
+1. **Turn on 2-Step Verification** on the Google account
+   (https://myaccount.google.com/security).
+2. **Security → App passwords** → create one for "Mail" → copy the 16-char
+   password (it looks like `abcd efgh ijkl mnop` — remove the spaces).
+3. Add these env vars to **Render** (and `server/.env` for local testing):
+
+   ```env
+   EMAIL_PROVIDER=smtp
+   EMAIL_FROM=Chess-HQ <yourname@gmail.com>
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_SECURE=true
+   SMTP_USER=yourname@gmail.com
+   SMTP_PASS=the16charapppassword
+   ```
+
+4. **Deploy** the Render service and register a test account — mail should
+   arrive at any address within a minute.
+
+### Other SMTP servers
+
+`SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` are generic: any provider's SMTP
+works (Zoho, Outlook, your own mail server). For STARTTLS use port 587 with
+`SMTP_SECURE=false`.
+
+### SMTP trade-offs vs a verified Resend domain
+
+- **Free and instant** — no domain, no DNS records.
+- Every message shows **your personal address** as the sender, and replies
+  land in your personal inbox. Deliverability is decent (fine Gmail→Gmail)
+  but a verified domain is more trustworthy to spam filters.
+- The App Password is a real credential — keep it in the Render env var,
+  never in code or public repos.
+
 ## If you'd rather use something else
 
-The mailer has a single seam (`server/src/services/mailer.ts`). To swap
-providers, add a `sendViaXxx()` adapter next to `sendViaResend()` and a new
-`EMAIL_PROVIDER` enum value in `server/src/config/env.ts` — the routes,
-tokens, and UI don't care which provider is behind it.
+The mailer has a single seam (`server/src/services/mailer.ts`). `resend`
+and `smtp` are built in; to add another provider, add a `sendViaXxx()`
+adapter and a new `EMAIL_PROVIDER` enum value in
+`server/src/config/env.ts` — the routes, tokens, and UI don't care which
+provider is behind it.

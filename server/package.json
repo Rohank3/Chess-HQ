@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:dry-run": "tsx src/db/migrate.ts --dry-run",
-    "test": "node --import ./src/config/test-env.ts --import tsx --test-reporter spec --test src/db/migrate.test.ts src/security/argon.test.ts src/security/jwt.test.ts src/security/refresh.test.ts src/security/validation.test.ts src/services/matchmaking.test.ts src/services/elo.test.ts src/services/clock.test.ts src/services/game-sweep.test.ts"
+    "test": "node --import ./src/config/test-env.ts --import tsx --test-reporter spec --test src/db/migrate.test.ts src/security/argon.test.ts src/security/jwt.test.ts src/security/refresh.test.ts src/security/validation.test.ts src/services/mailer.test.ts src/services/matchmaking.test.ts src/services/elo.test.ts src/services/clock.test.ts src/services/game-sweep.test.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
@@ -21,6 +21,7 @@
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^9.0.5",
     "pg": "^8.16.0",
     "socket.io": "^4.8.1",
     "zod": "^3.25.76"
@@ -30,6 +31,7 @@
     "@types/express": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^24.0.10",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.15.4",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"

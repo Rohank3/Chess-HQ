@@ -1,5 +1,6 @@
 import { env, isProduction, isTest } from '../config/env.js';
 import { logger } from '../utils/logger.js';
+import nodemailer, { type Transporter } from 'nodemailer';
 
 export interface MailMessage {
   to: string;
@@ -8,21 +9,44 @@ export interface MailMessage {
   html?: string;
 }
 
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+}
+
+/** Build a nodemailer transport for the SMTP provider. Extracted so tests
+ *  can inject a non-network transport (e.g. nodemailer's jsonTransport) —
+ *  production always builds from env. */
+export function createSmtpTransport(config: SmtpConfig): Transporter {
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: { user: config.user, pass: config.pass },
+  });
+}
+
 /**
- * Outbound email. One interface, two adapters:
+ * Outbound email. One interface, three adapters:
  *
  *   - `none` (default, dev/test): the message is logged to the console with
  *     the full text so flows are click-through-able in a terminal with zero
  *     setup and no network. Tests stay hermetic.
  *   - `resend` (production): POSTs to Resend's REST API with the configured
- *     API key. Free tier is 3,000 emails/month, 100/day — plenty for
- *     verification + password-reset traffic at hobby scale.
+ *     API key. Free tier is 3,000 emails/month, 100/day. Note the shared
+ *     onboarding@resend.dev sender can only deliver to the Resend account's
+ *     own inbox — sending to arbitrary recipients needs a verified domain.
+ *   - `smtp` (production): sends through any SMTP server (Gmail + an App
+ *     Password is the zero-cost path; ~500 emails/day).
  *
  * A delivery failure never fails the caller's own request (registration /
  * forgot-password still succeed); the error is logged and the user can
- * resend from the dashboard or try again. The one exception: misconfigured
- * production (provider=resend with no API key) is thrown so it surfaces in
- * server logs immediately.
+ * resend from the dashboard or try again. Misconfigured production
+ * (provider set but no credentials) is thrown so it surfaces in server logs
+ * immediately.
  */
 export async function sendMail(message: MailMessage): Promise<void> {
   if (isTest || env.EMAIL_PROVIDER === 'none') {
@@ -36,7 +60,7 @@ export async function sendMail(message: MailMessage): Promise<void> {
       logger.error('mail_not_configured', {
         to: message.to,
         subject: message.subject,
-        hint: 'EMAIL_PROVIDER=none in production: no email was sent and the verification link is unavailable. Set EMAIL_PROVIDER=resend and RESEND_API_KEY.',
+        hint: 'EMAIL_PROVIDER=none in production: no email was sent and the verification link is unavailable. Set EMAIL_PROVIDER=resend + RESEND_API_KEY or EMAIL_PROVIDER=smtp + SMTP_* credentials.',
       });
       return;
     }
@@ -50,11 +74,12 @@ export async function sendMail(message: MailMessage): Promise<void> {
 
   if (env.EMAIL_PROVIDER === 'resend') {
     await sendViaResend(message);
-    // Success is logged explicitly so the server logs tell the full story:
-    // mail_dev_send = dev mode (no real send), mail_sent = Resend accepted
-    // it, mail_send_failed = the API rejected it (bad key / unverified
-    // Resend account / daily cap). Without this a silent success looked
-    // identical to a no-op.
+    logger.info('mail_sent', { to: message.to, subject: message.subject });
+    return;
+  }
+
+  if (env.EMAIL_PROVIDER === 'smtp') {
+    await sendViaSmtp(message);
     logger.info('mail_sent', { to: message.to, subject: message.subject });
     return;
   }
@@ -86,4 +111,38 @@ async function sendViaResend(message: MailMessage): Promise<void> {
     const body = await res.text();
     throw new Error(`Resend API error ${res.status}: ${body.slice(0, 500)}`);
   }
+}
+
+function requireSmtpEnv(): SmtpConfig {
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+    throw new Error(
+      'EMAIL_PROVIDER=smtp requires SMTP_HOST, SMTP_USER and SMTP_PASS (Gmail: smtp.gmail.com, your address, and a 16-char App Password)',
+    );
+  }
+  return {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+  };
+}
+
+/** Send via SMTP. `transport` is injectable for hermetic tests; production
+ *  builds one from env (and rejects loudly when the SMTP_* credentials are
+ *  missing, mirroring the Resend path). The same send-failure contract as
+ *  Resend applies: nodemailer rejects on a failed handshake / rejected
+ *  message, and the caller's request is never failed (sendMailSafe logs it). */
+export async function sendViaSmtp(
+  message: MailMessage,
+  transport?: Transporter,
+): Promise<unknown> {
+  const t = transport ?? createSmtpTransport(requireSmtpEnv());
+  return t.sendMail({
+    from: env.EMAIL_FROM,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    ...(message.html ? { html: message.html } : {}),
+  });
 }
