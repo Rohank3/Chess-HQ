@@ -16,12 +16,30 @@ export const passwordSchema = z
 export const emailSchema = z
   .string()
   .email({ message: 'Invalid email' })
-  .max(254)
-  .nullish();
+  .max(254);
 
 export const registerSchema = z.object({
   username: usernameSchema,
+  // Email is mandatory for registered accounts: it is the only channel for
+  // password recovery (guests are the only rows allowed to skip it).
   email: emailSchema,
+  password: passwordSchema,
+});
+
+// One-time emailed tokens are 64 hex chars (32 random bytes).
+export const emailTokenSchema = z
+  .string()
+  .min(32, { message: 'Invalid token' })
+  .max(128, { message: 'Invalid token' });
+
+export const verifyEmailSchema = z.object({ token: emailTokenSchema });
+
+export const resendVerificationSchema = z.object({});
+
+export const forgotPasswordSchema = z.object({ email: emailSchema });
+
+export const resetPasswordSchema = z.object({
+  token: emailTokenSchema,
   password: passwordSchema,
 });
 

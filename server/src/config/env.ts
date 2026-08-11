@@ -54,6 +54,16 @@ const schema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  // Outbound email. `none` (default) logs messages to the console instead of
+  // sending — perfect for dev and keeps tests hermetic. `resend` sends via
+  // Resend's REST API (free tier: 3,000 emails/month, 100/day) and requires
+  // RESEND_API_KEY.
+  EMAIL_PROVIDER: z.enum(['none', 'resend']).default('none'),
+  // The From address on every message. With Resend's free tier this must be
+  // `onboarding@resend.dev` until you verify your own domain (then e.g.
+  // `Chess-HQ <no-reply@yourdomain.com>`).
+  EMAIL_FROM: z.string().default('Chess-HQ <onboarding@resend.dev>'),
+  RESEND_API_KEY: z.string().optional(),
   // How long a draw offer stays open before a stale-offer watchdog reaps
   // it. A 30s expiry mirrors the Lichess default -- enough for a real
   // opponent to read the offer and respond, short enough that an abandoned

@@ -24,6 +24,9 @@ export interface AuthUser {
   username: string;
   elo: number;
   isGuest: boolean;
+  /** True once the account's email is confirmed (enables password recovery).
+   *  Guests are always false — they have no email. */
+  emailVerified: boolean;
 }
 
 interface AuthState {

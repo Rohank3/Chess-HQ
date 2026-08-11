@@ -22,8 +22,11 @@ export function Register(): React.JSX.Element {
     e.preventDefault();
     setBusy(true);
     try {
-      await register(username, email.trim() === '' ? null : email.trim(), password);
-      push('success', 'Account created. Welcome to Chess-HQ.');
+      await register(username, email.trim(), password);
+      push(
+        'success',
+        'Account created. Check your inbox to verify your email — it enables password recovery.',
+      );
       navigate('/');
     } catch (err) {
       const { message } = err as SubmitError;
@@ -61,7 +64,7 @@ export function Register(): React.JSX.Element {
         </div>
         <h1 className="text-2xl font-semibold text-slate-100">Create your account</h1>
         <p className="mt-2 text-sm text-slate-400">
-          No email required — just a username.
+          Email is required so you can recover your password if you ever forget it.
         </p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <label className="block">
@@ -82,13 +85,14 @@ export function Register(): React.JSX.Element {
           </label>
           <label className="block">
             <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">
-              Email (optional)
+              Email
             </span>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
+              required
               maxLength={254}
               className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-neon-500 focus:ring-2 focus:ring-neon-500/30"
             />

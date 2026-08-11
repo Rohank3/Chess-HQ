@@ -5,6 +5,9 @@ import { App } from './App';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { VerifyEmail } from './pages/VerifyEmail';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard } from './pages/Dashboard';
 import { Game } from './pages/Game';
 import { ChallengePage } from './pages/Challenge';
@@ -20,6 +23,9 @@ const router = createBrowserRouter([
       { index: true, element: <Landing /> },
       { path: 'login', element: <Login /> },
       { path: 'register', element: <Register /> },
+      { path: 'verify-email', element: <VerifyEmail /> },
+      { path: 'forgot-password', element: <ForgotPassword /> },
+      { path: 'reset-password', element: <ResetPassword /> },
       { path: 'challenge/:id', element: <ChallengePage /> },
       {
         element: <ProtectedRoute />,

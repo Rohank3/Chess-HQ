@@ -7,6 +7,7 @@ export interface AuthResponse {
     username: string;
     elo: number;
     isGuest: boolean;
+    emailVerified: boolean;
   };
 }
 
@@ -16,6 +17,7 @@ export interface MeResponse {
     username: string;
     elo: number;
     isGuest: boolean;
+    emailVerified: boolean;
   };
 }
 

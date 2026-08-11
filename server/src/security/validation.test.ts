@@ -1,6 +1,12 @@
 import nodeTest from 'node:test';
 import assert from 'node:assert/strict';
-import { registerSchema, loginSchema } from './validation.js';
+import {
+  registerSchema,
+  loginSchema,
+  verifyEmailSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from './validation.js';
 
 nodeTest('validation: register accepts a well-formed user', () => {
   const result = registerSchema.safeParse({
@@ -38,13 +44,21 @@ nodeTest('validation: register rejects a too-short password', () => {
   assert.ok(!result.success);
 });
 
-nodeTest('validation: register accepts a null email (optional field)', () => {
+nodeTest('validation: register rejects a missing email (required field)', () => {
+  const result = registerSchema.safeParse({
+    username: 'rohan',
+    password: 'long-enough-pw',
+  });
+  assert.ok(!result.success);
+});
+
+nodeTest('validation: register rejects a null email (required field)', () => {
   const result = registerSchema.safeParse({
     username: 'rohan',
     email: null,
     password: 'long-enough-pw',
   });
-  assert.ok(result.success);
+  assert.ok(!result.success);
 });
 
 nodeTest('validation: register rejects a malformed email', () => {
@@ -69,4 +83,28 @@ nodeTest('validation: login rejects empty identifier', () => {
 nodeTest('validation: login rejects empty password', () => {
   const result = loginSchema.safeParse({ identifier: 'rohan', password: '' });
   assert.ok(!result.success);
+});
+
+nodeTest('validation: verify-email rejects a short token', () => {
+  const result = verifyEmailSchema.safeParse({ token: 'short' });
+  assert.ok(!result.success);
+});
+
+nodeTest('validation: verify-email accepts a 64-char hex token', () => {
+  const result = verifyEmailSchema.safeParse({
+    token: 'a'.repeat(64),
+  });
+  assert.ok(result.success);
+});
+
+nodeTest('validation: forgot-password rejects a malformed email', () => {
+  const result = forgotPasswordSchema.safeParse({ email: 'nope' });
+  assert.ok(!result.success);
+});
+
+nodeTest('validation: reset-password enforces the password rules', () => {
+  const bad = resetPasswordSchema.safeParse({ token: 'a'.repeat(64), password: 'short' });
+  assert.ok(!bad.success);
+  const good = resetPasswordSchema.safeParse({ token: 'a'.repeat(64), password: 'long-enough-pw' });
+  assert.ok(good.success);
 });

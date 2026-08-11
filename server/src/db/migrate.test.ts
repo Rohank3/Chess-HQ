@@ -8,6 +8,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const migrationPath = resolve(here, 'migrations/001_init.sql');
 const nullableTerminationPath = resolve(here, 'migrations/002_games_termination_nullable.sql');
 const friendshipsPath = resolve(here, 'migrations/003_friendships.sql');
+const emailVerificationPath = resolve(here, 'migrations/004_email_verification.sql');
 
 nodeTest(
   '003 creates the friendships table with a symmetric pair-unique index',
@@ -26,6 +27,24 @@ nodeTest(
         sql.includes('LEAST(requester_id, addressee_id)') &&
         sql.includes('GREATEST(requester_id, addressee_id)'),
       'one row per unordered pair via the LEAST/GREATEST unique expression index',
+    );
+  },
+);
+
+nodeTest(
+  '004 adds email-verification state and requires email for registered users',
+  async (_t: TestContext) => {
+    const sql = readFileSync(emailVerificationPath, 'utf8');
+    assert.ok(
+      sql.includes('email_verified_at') &&
+        sql.includes('verify_token_hash') &&
+        sql.includes('reset_token_hash'),
+      'verification + reset token state columns must be added',
+    );
+    assert.ok(
+      sql.includes('users_email_required') &&
+        sql.includes('CHECK (is_guest = TRUE OR email IS NOT NULL) NOT VALID'),
+      'registered users must carry an email, guests exempt, legacy rows untouched',
     );
   },
 );

@@ -109,7 +109,10 @@ export function Login(): React.JSX.Element {
           {guestBusy ? 'Starting…' : 'Continue as guest'}
         </button>
         <p className="mt-6 text-center text-sm text-slate-400">
-          No account?{' '}
+          <Link to="/forgot-password" className="text-neon-400 hover:text-neon-500">
+            Forgot password?
+          </Link>
+          <span className="mx-2 text-slate-600">·</span>
           <Link to="/register" className="text-neon-400 hover:text-neon-500">
             Create one
           </Link>
