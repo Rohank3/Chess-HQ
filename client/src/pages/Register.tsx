@@ -23,11 +23,9 @@ export function Register(): React.JSX.Element {
     setBusy(true);
     try {
       await register(username, email.trim(), password);
-      push(
-        'success',
-        'Account created. Check your inbox to verify your email — it enables password recovery.',
-      );
-      navigate('/');
+      // No session is issued at registration — the account activates only
+      // once the emailed verification link is clicked.
+      navigate(`/verify-email-sent?email=${encodeURIComponent(email.trim())}`);
     } catch (err) {
       const { message } = err as SubmitError;
       push('error', message);

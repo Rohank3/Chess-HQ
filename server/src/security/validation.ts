@@ -34,8 +34,6 @@ export const emailTokenSchema = z
 
 export const verifyEmailSchema = z.object({ token: emailTokenSchema });
 
-export const resendVerificationSchema = z.object({});
-
 export const forgotPasswordSchema = z.object({ email: emailSchema });
 
 export const resetPasswordSchema = z.object({

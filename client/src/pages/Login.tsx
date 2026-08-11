@@ -16,17 +16,25 @@ export function Login(): React.JSX.Element {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [guestBusy, setGuestBusy] = useState(false);
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
+    setEmailNotVerified(false);
     try {
       await login(identifier, password);
       push('success', 'Welcome back.');
       navigate('/');
     } catch (err) {
-      const { message } = err as SubmitError;
-      push('error', message);
+      const { code, message } = err as SubmitError;
+      // A pending account (created but never verified) can't sign in — point
+      // at the resend flow instead of just failing.
+      if (code === 'email_not_verified') {
+        setEmailNotVerified(true);
+      } else {
+        push('error', message);
+      }
     } finally {
       setBusy(false);
     }
@@ -94,6 +102,16 @@ export function Login(): React.JSX.Element {
           >
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
+          {emailNotVerified && (
+            <p className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-300">
+              This account hasn't been activated yet — check your inbox for the verification
+              email, or{' '}
+              <Link to="/verify-email-sent" className="font-semibold text-neon-400 hover:text-neon-500">
+                resend it
+              </Link>
+              .
+            </p>
+          )}
         </form>
         <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
           <span className="h-px flex-1 bg-slate-800" />

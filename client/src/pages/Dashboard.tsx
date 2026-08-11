@@ -1,61 +1,12 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useStats } from '../hooks/useStats';
 import { useFriends } from '../hooks/useFriends';
-import { http } from '../api/http';
 import { Spinner } from '../components/Spinner';
 import { EloDonut } from '../components/EloDonut';
 import { MatchHistoryTable } from '../components/MatchHistoryTable';
 import { FriendsSection } from '../components/FriendsSection';
 import { IncomingChallengesSection } from '../components/IncomingChallengesSection';
-
-/**
- * A one-shot banner for registered users whose email hasn't been verified
- * yet. Email is required at sign-up and is the only channel for password
- * recovery, so this nudge (with a resend) closes the loop.
- */
-function VerifyEmailBanner(): React.JSX.Element {
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
-
-  async function resend() {
-    setBusy(true);
-    try {
-      await http.post('/api/auth/resend-verification', {});
-      setSent(true);
-    } catch {
-      setSent(true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="mt-6 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-6 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-amber-300">Verify your email</p>
-          <p className="mt-0.5 text-sm text-slate-300">
-            Confirm your email address so you can reset your password if you ever forget it.
-          </p>
-        </div>
-        {!sent ? (
-          <button
-            type="button"
-            onClick={resend}
-            disabled={busy}
-            className="shrink-0 rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? 'Sending…' : 'Resend verification email'}
-          </button>
-        ) : (
-          <p className="shrink-0 text-sm text-accent-emerald">Verification email sent — check your inbox.</p>
-        )}
-      </div>
-    </section>
-  );
-}
 
 /**
  * The friends + incoming-challenges grid. Rendered only for registered users
@@ -148,9 +99,6 @@ export function Dashboard(): React.JSX.Element {
           </div>
         </div>
       </section>
-
-      {/* Email verification nudge (registered users only) ---------------- */}
-      {!user.isGuest && !user.emailVerified && <VerifyEmailBanner />}
 
       {/* Friends + incoming challenges (registered users only) ---------- */}
       {!user.isGuest && <FriendsPanels />}

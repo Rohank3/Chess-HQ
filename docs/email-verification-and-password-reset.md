@@ -29,22 +29,23 @@ Date: 2026-08-11
 
 ## 3. Non-goals (explicitly out of scope for v1)
 
+
 - ❌ Changing / re-adding an email address in account settings (needs its own verify flow — defer).
 - ❌ Gating features behind verification (e.g. blocking ranked play for unverified users — defer).
 - ❌ Email sign-in / magic links, 2FA, or "log in with email" (login stays username-only for now).
 - ❌ Username recovery ("what's my username?") — out of scope.
 - ❌ Marketing/newsletter emails of any kind.
-- ❌ Making email **required** at registration (keep optional; see Open Decisions).
+- ✅ Email **is** required at registration (decided 2026-08-11, along with the activation gate).
 - ❌ Self-hosted SMTP server operation — we use a managed provider or SMTP relay only.
 
 ---
 
 ## 4. Functional requirements
 
-### FR-1 Register with email (small change)
-- Registration keeps the optional `email` field exactly as today. No new gating.
-- On successful registration **with** an email: create a verification token, email a "confirm your email" link, and return the session as today. The UI shows "Check your inbox to verify your email" as a dismissible hint.
-- Registration without email: unchanged.
+### FR-1 Register with email (activation gate)
+- Email is **required** at registration (form, schema, DB constraint `users_email_required` — guests and legacy email-less rows exempt).
+- Registration creates a **pending** account and issues **no session**: a verification link is emailed, and the user lands on `/verify-email-sent` ("Check your inbox", with a resend keyed by email address).
+- **The account cannot be used until the emailed link is clicked** — login rejects pending accounts with `403 email_not_verified` and points at the resend flow. Verification is a gate on registration, not an afterthought.
 
 ### FR-2 Verify email
 - `GET/POST /api/auth/verify-email?token=<token>` consumes the token.
@@ -53,10 +54,10 @@ Date: 2026-08-11
 - Expiry: **24 hours** from issue.
 
 ### FR-3 Resend verification
-- `POST /api/auth/resend-verification` (authed) → sends a fresh link. Rate-limited, e.g. **1 per 60s**, to avoid inbox spam.
-- Dashboard shows a small, dismissible banner for unverified users who have an email: "Verify your email to enable password recovery." with a Resend button.
+- `POST /api/auth/resend-verification { email }` — unauthenticated (a pending account can't sign in, so the "didn't get the email?" page must work without a session). Responds identically whether or not a pending account exists (anti-enumeration); rate-limited to avoid inbox spam.
 
 ### FR-4 Forgot password (unauthenticated)
+- Only **verified** accounts can receive a reset link; unverified ones get a "verify first" email.
 - `POST /api/auth/forgot-password { email }`:
   - Always responds success-ish (200/202) **regardless of whether the email exists** — prevents account enumeration.
   - If the email belongs to a registered, **verified**, non-guest user: mint a reset token (expiry **1 hour**), email the reset link.

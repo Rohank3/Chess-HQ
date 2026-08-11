@@ -15,8 +15,6 @@ export function VerifyEmail(): React.JSX.Element {
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
   const [status, setStatus] = useState<Status>('verifying');
-  const [resending, setResending] = useState(false);
-  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,19 +34,6 @@ export function VerifyEmail(): React.JSX.Element {
       cancelled = true;
     };
   }, [token]);
-
-  async function resend() {
-    setResending(true);
-    try {
-      await http.post('/api/auth/resend-verification', {});
-      setResent(true);
-    } catch {
-      // Server already rate-limits; surface a generic message either way.
-      setResent(true);
-    } finally {
-      setResending(false);
-    }
-  }
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-12">
@@ -95,25 +80,17 @@ export function VerifyEmail(): React.JSX.Element {
               This verification link isn't valid anymore. Verification links expire after 24
               hours, and each one can only be used once.
             </p>
-            {!resent ? (
-              <button
-                type="button"
-                onClick={resend}
-                disabled={resending}
-                className="mt-6 rounded-lg bg-neon-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-neon-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {resending ? 'Sending…' : 'Send me a new link'}
-              </button>
-            ) : (
-              <p className="mt-6 text-sm text-accent-emerald">
-                A fresh verification link is on its way — check your inbox.
-              </p>
-            )}
+            <Link
+              to="/verify-email-sent"
+              className="mt-6 inline-block rounded-lg bg-neon-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-neon-400"
+            >
+              Send me a new link
+            </Link>
             <p className="mt-4 text-sm text-slate-400">
               <Link to="/login" className="text-neon-400 hover:text-neon-500">
                 Sign in
               </Link>{' '}
-              to resend from your dashboard.
+              once your email is verified.
             </p>
           </>
         )}

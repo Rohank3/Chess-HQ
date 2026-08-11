@@ -103,14 +103,14 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
 
   const register = useCallback(
     async (username: string, email: string | null, password: string) => {
-      const res = await http.post<AuthResponse>('/api/auth/register', {
+      // Registration creates a PENDING account and does NOT sign you in: the
+      // email must be verified first (activation gate). The caller routes to
+      // the "check your inbox" screen on success.
+      await http.post<{ ok: true }>('/api/auth/register', {
         username,
         email,
         password,
       });
-      storeAuth(res.data.token);
-      setToken(res.data.token);
-      setUser(res.data.user);
     },
     [],
   );

@@ -127,12 +127,13 @@ authRouter.post(
         [username, email, passwordHash],
       );
       const user = result.rows[0]!;
-      // Email the verification link (best-effort; the dashboard resend
-      // button covers a failed delivery). The session is issued either way
-      // — verification is non-blocking by design.
+      // Email the verification link (best-effort; the "check your inbox"
+      // page's resend button covers a failed delivery). NO session is issued
+      // here: the account is created in a pending state and cannot be used
+      // until the emailed link is clicked — verification is a gate on
+      // registration, not an afterthought.
       await sendMailSafe(() => issueVerificationEmail(user.id, email), 'register');
-      const token = signToken({ sub: user.id, name: user.username, guest: false });
-      res.status(201).json({ token, user: publicUser(user) });
+      res.status(201).json({ ok: true });
     } catch (err) {
       next(err);
     }
@@ -173,6 +174,14 @@ authRouter.post(
       const ok = await verifyPassword(user.password_hash, password);
       if (!ok) {
         return next(unauthorized('invalid_credentials', 'Invalid username or password'));
+      }
+
+      // An account is only usable after its email is verified: registration
+      // created it in a pending state, and this is the activation gate.
+      if (!user.email_verified_at) {
+        return next(
+          forbidden('email_not_verified', 'Verify your email to activate your account.'),
+        );
       }
 
       const token = signToken({ sub: user.id, name: user.username, guest: false });
@@ -281,14 +290,12 @@ authRouter.post(
       if (!user) {
         return next(badRequest('invalid_or_expired', 'This verification link is invalid or has expired.'));
       }
-      await pool.query(
-        `UPDATE users
-         SET email_verified_at = now(),
-             verify_token_hash = NULL,
-             verify_token_expires_at = NULL
-         WHERE id = $1`,
-        [user.id],
-      );
+      // The token row is kept until its natural expiry rather than deleted:
+      // a replayed link then returns success instead of "expired" (the token
+      // can only ever verify the same account, so re-verification is a no-op
+      // and harmless). This makes the endpoint idempotent, which matters in
+      // dev where React StrictMode fires the page's verify POST twice.
+      await pool.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [user.id]);
       res.json({ ok: true });
     } catch (err) {
       next(err);
@@ -297,32 +304,39 @@ authRouter.post(
 );
 
 /**
- * POST /api/auth/resend-verification {} (authed)
+ * POST /api/auth/resend-verification { email }
  *
- * Re-issues the verification email for the signed-in user. Rate-limited so
- * an eager clicker can't flood an inbox; idempotent when already verified.
+ * Re-issues the verification email for a pending (unverified) account.
+ * Unauthenticated on purpose — a brand-new user can't sign in until they
+ * verify, so the "didn't get the email?" page must work without a session.
+ * The response is identical whether or not such an account exists (no user
+ * enumeration); rate-limited so an eager clicker can't flood an inbox.
  */
 authRouter.post(
   '/resend-verification',
   rateLimit({ scope: 'resend', max: 3, windowMs: 60_000 }),
-  requireAuth,
   async (req, res, next) => {
     try {
+      const parsed = forgotPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(200).json({ ok: true });
+      }
+      const { email } = parsed.data;
       const row = await pool.query<{
-        email: string | null;
+        id: string;
         email_verified_at: string | null;
         is_guest: boolean;
-      }>('SELECT email, email_verified_at, is_guest FROM users WHERE id = $1', [req.user!.id]);
+      }>(
+        'SELECT id, email_verified_at, is_guest FROM users WHERE email = $1 LIMIT 1',
+        [email],
+      );
       const user = row.rows[0];
-      if (!user) return next(unauthorized('invalid_token', 'User no longer exists'));
-      if (user.is_guest) return next(forbidden('guests_only', 'Guests have no email to verify'));
-      if (!user.email) return next(badRequest('no_email', 'No email on this account'));
-      if (user.email_verified_at) {
-        res.json({ ok: true, alreadyVerified: true });
-        return;
+      // Only send to real pending accounts; everyone else gets the uniform
+      // success envelope.
+      if (user && !user.is_guest && !user.email_verified_at) {
+        await sendMailSafe(() => issueVerificationEmail(user.id, email), 'resend');
       }
-      await sendMailSafe(() => issueVerificationEmail(req.user!.id, user.email!), 'resend');
-      res.json({ ok: true });
+      res.status(200).json({ ok: true });
     } catch (err) {
       next(err);
     }
@@ -378,9 +392,9 @@ authRouter.post(
               text:
                 `Someone requested a password reset for ${user.username}, but this email ` +
                 `address hasn't been verified yet.\n\n` +
-                `Confirm your email first, then request the reset again:\n` +
-                `Visit your Chess-HQ dashboard and use the verification banner, or sign in ` +
-                `and check the banner.\n\n` +
+                `Confirm your email first, then request the reset again — use the ` +
+                `verification link emailed when you registered, or resend one from the ` +
+                `"check your inbox" page after signing up.\n\n` +
                 `If this wasn't you, ignore this email.`,
             }),
           'forgot_unverified',

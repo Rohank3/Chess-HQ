@@ -2,9 +2,11 @@
 
 The app now requires an email at sign-up and uses it for two things:
 
-1. **Email verification** — a link is emailed after registration; the
-   dashboard shows a "Verify your email" banner until it's done.
-2. **Password reset** — only verified addresses receive reset links, via
+1. **Email verification (activation gate)** — a link is emailed at
+   registration and the account is PENDING until you click it: you can't
+   sign in before that (login says "verify your email to activate your
+   account"), and the "check your inbox" page can resend the link.
+2. **Password reset** — only verified accounts receive reset links, via
    `/forgot-password` → emailed one-time link → `/reset-password`.
 
 Email is **off by default**: with `EMAIL_PROVIDER=none` (the dev default),
