@@ -164,11 +164,13 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
 
       const game = await getGame(gameId);
       const myColor = colorOf(userId, game);
-      if (myColor === null) {
-        ack?.({ ok: false, error: 'forbidden', message: 'Not a player in this game' });
-        return;
-      }
+      const isPlayer = myColor !== null;
 
+      // Anyone authenticated (player OR spectator) may subscribe. Spectators
+      // join the room read-only: they receive every game:state broadcast but
+      // every mutating handler (game:move / resign / draw) still rejects
+      // non-players, so watching a friend's live game from the friends list
+      // is safe without opening the board to interference.
       socket.join(roomForGame(gameId));
       const chess = await gameState.loadOrRehydrate(gameId);
       const isOver = game.endedAt !== null;
@@ -180,12 +182,20 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       // reloaded room (no location.state to seed from) can rebuild the full
       // header: board orientation, drag rules, and the opponent strip all
       // depend on them, and the snapshot alone doesn't say which side you are.
+      // Spectators have no colour or opponent, but both players are included
+      // so the room can render a read-only header with both names.
+      const [opponent, players] = await Promise.all([
+        isPlayer ? loadOpponentSummary(userId, game) : Promise.resolve(null),
+        loadBothPlayers(game),
+      ]);
       ack?.({
         ok: true,
         status: 'subscribed',
         gameId,
         color: myColor,
-        opponent: await loadOpponentSummary(userId, game),
+        opponent,
+        white: players.white,
+        black: players.black,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
@@ -602,6 +612,29 @@ async function loadOpponentSummary(userId: string, game: GameRow): Promise<Oppon
     id: opponentId,
     username: row.username,
     elo: userId === game.whiteUserId ? (game.blackEloBefore ?? 1200) : (game.whiteEloBefore ?? 1200),
+  };
+}
+
+/** Both players' public profiles, for the spectator header. Elo-before from
+ *  the games row (falling back to 1200 when unrated), usernames from the
+ *  users table. */
+async function loadBothPlayers(game: GameRow): Promise<{ white: OpponentSummary; black: OpponentSummary }> {
+  const result = await pool.query<{ white_username: string; black_username: string }>(
+    'SELECT wu.username AS white_username, bu.username AS black_username FROM users wu, users bu WHERE wu.id = $1 AND bu.id = $2',
+    [game.whiteUserId, game.blackUserId],
+  );
+  const row = result.rows[0];
+  return {
+    white: {
+      id: game.whiteUserId,
+      username: row?.white_username ?? 'White',
+      elo: game.whiteEloBefore ?? 1200,
+    },
+    black: {
+      id: game.blackUserId,
+      username: row?.black_username ?? 'Black',
+      elo: game.blackEloBefore ?? 1200,
+    },
   };
 }
 

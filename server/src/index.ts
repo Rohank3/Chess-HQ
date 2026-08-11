@@ -9,6 +9,7 @@ import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { statsRouter } from './routes/stats.js';
 import { challengesRouter } from './routes/challenges.js';
+import { friendsRouter } from './routes/friends.js';
 import { createSocketLayer } from './sockets/index.js';
 import { runMigrations } from './db/migrate.js';
 
@@ -80,6 +81,7 @@ app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/challenges', challengesRouter);
+app.use('/api/friends', friendsRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'not_found' });

@@ -27,10 +27,14 @@ export interface AckOk {
   gameId?: string;
   fen?: string;
   clocks?: ClockState;
-  color?: CommandColor;
   // game:subscribe ack carries the viewer's colour + the opponent summary
   // so a deep-linked/reloaded room can rebuild its header without navigation state.
-  opponent?: PlayerSummary;
+  // Spectators get no colour/opponent, but both players so the room can render
+  // a read-only header.
+  color?: CommandColor | null;
+  opponent?: PlayerSummary | null;
+  white?: PlayerSummary;
+  black?: PlayerSummary;
 }
 export interface AckErr {
   ok: false;
@@ -147,6 +151,68 @@ export interface ChallengeAcceptedPayload {
 
 export interface ChallengeJoinInput {
   challengeId: string;
+}
+
+// --- Friends + direct challenges -------------------------------------------
+
+export interface FriendUser {
+  id: string;
+  username: string;
+  elo: number;
+  online?: boolean;
+  /** The friend's current live game, if they are playing one right now. */
+  activeGame?: {
+    gameId: string;
+    white: PlayerSummary;
+    black: PlayerSummary;
+  } | null;
+}
+
+export interface FriendshipEntry {
+  id: string;
+  user: FriendUser;
+  createdAt: string | null;
+}
+
+export interface FriendsResponse {
+  friends: FriendshipEntry[];
+  incoming: FriendshipEntry[];
+  outgoing: FriendshipEntry[];
+}
+
+// Server -> target socket event when a direct challenge is created.
+export interface ChallengeIncomingPayload {
+  challenge: ChallengeDetails;
+}
+
+// Server -> creator when the target declines.
+export interface ChallengeDeclinedPayload {
+  challengeId: string;
+  targetUserId: string;
+  targetUsername: string;
+}
+
+// Server -> target when the creator cancels.
+export interface ChallengeCancelledPayload {
+  challengeId: string;
+  creatorUserId: string;
+}
+
+// Server -> addressee when someone requests them.
+export interface FriendRequestPayload {
+  friendshipId: string;
+  requester: FriendUser;
+}
+
+// Server -> requester when the request is accepted.
+export interface FriendAcceptedPayload {
+  friendshipId: string;
+  friend: FriendUser;
+}
+
+// Server -> requester when the request is declined.
+export interface FriendDeclinedPayload {
+  friendshipId: string;
 }
 
 // snake_case command payloads emitted by the client.

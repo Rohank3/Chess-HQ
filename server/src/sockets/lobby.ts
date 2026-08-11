@@ -5,6 +5,24 @@ import { logger } from '../utils/logger.js';
 type Sockets = Map<string, string>;
 const userSockets = new Map<string, Sockets>();
 
+// The live Socket.IO server instance, set once by createSocketLayer. HTTP
+// routes (friends, direct challenges) use it to push realtime events to a
+// user's connected sockets without importing sockets/index.ts (which would
+// create an import cycle).
+let ioRef: Server | null = null;
+
+export function setIo(io: Server): void {
+  ioRef = io;
+}
+
+/** Emit an event to every socket a user currently has connected. */
+export function emitToUser(userId: string, event: string, payload: unknown): void {
+  if (!ioRef) return;
+  for (const sid of getSocketIdsForUser(userId)) {
+    ioRef.to(sid).emit(event, payload);
+  }
+}
+
 // When a user's LAST socket dropped, the wall-clock time of that drop. Used
 // by the abandoned-game sweep to decide "both players have been fully offline
 // for a long time" -- the registry only knows who is connected NOW, not since

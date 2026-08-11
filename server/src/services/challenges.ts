@@ -9,6 +9,8 @@ export interface Challenge {
   incrementMs: number;
   createdAt: number;
   expiresAt: number;
+  /** When set, only this user may accept the challenge (direct friend challenge). */
+  targetUserId?: string;
 }
 
 const CHALLENGE_TTL_MS = 30 * 60 * 1000;
@@ -28,6 +30,7 @@ export function createChallenge(input: {
   creatorElo: number;
   initialMs: number;
   incrementMs: number;
+  targetUserId?: string;
 }): Challenge {
   const now = Date.now();
   const challenge: Challenge = {
@@ -38,6 +41,26 @@ export function createChallenge(input: {
   };
   challenges.set(challenge.id, challenge);
   return challenge;
+}
+
+/**
+ * Every live challenge addressed to this user (direct friend challenges),
+ * oldest first. Enforces expiry lazily like getChallenge. Link challenges
+ * (no target) are deliberately excluded — they are accepted via their URL.
+ */
+export function getIncomingChallengesFor(userId: string): Challenge[] {
+  const now = Date.now();
+  const incoming: Challenge[] = [];
+  for (const challenge of challenges.values()) {
+    if (challenge.targetUserId !== userId) continue;
+    if (now > challenge.expiresAt) {
+      challenges.delete(challenge.id);
+      continue;
+    }
+    incoming.push(challenge);
+  }
+  incoming.sort((a, b) => a.createdAt - b.createdAt);
+  return incoming;
 }
 
 /** Read a live challenge, lazily dropping it once expired. */

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { GameProvider, useGameContext } from '../context/GameContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useFriends } from '../hooks/useFriends';
 import { GameTimer } from '../components/GameTimer';
 import { CapturedPieces } from '../components/CapturedPieces';
 import { MoveListSidebar } from '../components/MoveListSidebar';
@@ -40,9 +43,76 @@ function pieceTypeAt(fen: string, square: string): string {
   return '';
 }
 
+/**
+ * "Add friend" in the opponent strip. Registered users can friend the person
+ * they just played without leaving the room; the button reflects the current
+ * relationship (Add / Requested / Friends / Accept request). Hidden for
+ * guests and while no opponent is known yet.
+ */
+function OpponentFriendButton({
+  opponent,
+}: {
+  opponent: { id: string; username: string } | null;
+}): React.JSX.Element | null {
+  const { user } = useAuth();
+  const { push } = useToast();
+  const friends = useFriends();
+
+  useEffect(() => {
+    if (opponent?.id) void friends.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opponent?.id]);
+
+  if (!user || user.isGuest || !opponent) return null;
+
+  const friendEntry = friends.friends.find((f) => f.user.id === opponent.id);
+  const outgoingEntry = friends.outgoingRequests.find((r) => r.user.id === opponent.id);
+  const incomingEntry = friends.incomingRequests.find((r) => r.user.id === opponent.id);
+
+  if (friendEntry) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-accent-emerald/40 bg-accent-emerald/10 px-2 py-0.5 text-xs font-medium text-accent-emerald">
+        Friends
+      </span>
+    );
+  }
+  if (outgoingEntry) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900/60 px-2 py-0.5 text-xs font-medium text-slate-400">
+        Requested
+      </span>
+    );
+  }
+  if (incomingEntry) {
+    return (
+      <button
+        type="button"
+        onClick={() => void friends.acceptRequest(incomingEntry.id)}
+        className="rounded-md border border-neon-500/40 bg-neon-500/10 px-2 py-0.5 text-xs font-medium text-neon-400 transition hover:bg-neon-500/20"
+      >
+        Accept request
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        void friends.addFriend(opponent.username).then((res) => {
+          if (!res.ok) push('error', res.message ?? 'Could not add friend.');
+        })
+      }
+      className="rounded-md border border-slate-700 bg-slate-900/60 px-2 py-0.5 text-xs font-medium text-slate-300 transition hover:border-neon-500/50 hover:text-neon-400"
+    >
+      Add friend
+    </button>
+  );
+}
+
 function GameRoom(): React.JSX.Element {
   const { optimisticFen, gameId, myColor, opponent, game, matchmaking, submitMove, legalMovesFrom } =
     useGameContext();
+  const { push } = useToast();
 
   // A rejected game:subscribe (forbidden / internal error) with no snapshot
   // means the room cannot load at all -- show that instead of a board with
@@ -99,10 +169,12 @@ function GameRoom(): React.JSX.Element {
         return;
       }
       // Click-to-move: with a piece selected, clicking one of its highlighted
-      // targets submits the move. The piece type is read off the rendered FEN;
-      // promotion is caught by submitMove (opens the dialog, no snap-back).
-      // Note: the map values are `isCapture`, which is false for quiet moves,
-      // so test key presence, not truthiness.
+      // targets submits the move -- the exact same precomputed target map that
+      // drives the square highlights, so nothing is re-derived on the click.
+      // The piece type is read off the rendered FEN; promotion is caught by
+      // submitMove (opens the dialog, no snap-back). Note: the map values are
+      // `isCapture`, which is false for quiet moves, so test key presence, not
+      // truthiness.
       if (selectedSquare && Object.hasOwn(legalTargets, square)) {
         submitMove({
           piece: { pieceType: pieceTypeAt(position, selectedSquare) },
@@ -123,6 +195,10 @@ function GameRoom(): React.JSX.Element {
       if (moves.length === 0) {
         setSelectedSquare(null);
         setLegalTargets({});
+        // A click on a piece that is pinned or blocked reads as a dead click;
+        // say so instead of silently doing nothing (queens/rooks/bishops are
+        // locked down at the start position, which looked like a bug).
+        if (pieceTypeAt(position, square)) push('info', 'No legal moves for that piece right now.');
         return;
       }
       setSelectedSquare(square);
@@ -130,7 +206,7 @@ function GameRoom(): React.JSX.Element {
       for (const m of moves) targets[m.to] = m.isCapture;
       setLegalTargets(targets);
     },
-    [snapshot, isGameOver, myColor, legalMovesFrom, position, selectedSquare, legalTargets, submitMove],
+    [snapshot, isGameOver, myColor, legalMovesFrom, position, selectedSquare, legalTargets, submitMove, push],
   );
 
   const squareStyles = useMemo<Record<string, React.CSSProperties>>(() => {
@@ -171,6 +247,14 @@ function GameRoom(): React.JSX.Element {
   const orientation: 'white' | 'black' = myColor === 'b' ? 'black' : 'white';
   const isMyTurn = snapshot?.turn === myColor;
   const canDrag = !!(myColor && snapshot && !isGameOver && isMyTurn);
+  // A spectator watches someone else's game: the subscribe ack gives us both
+  // players but no colour, so the board is read-only (no drag, no click-to-
+  // move, no resign/draw) and the header shows both names. `game.color ===
+  // null` distinguishes a true spectator from a player whose colour is still
+  // being adopted from the same ack (effects run after render, so relying on
+  // myColor alone would briefly flash "Spectating" for a deep-linked player).
+  const isSpectator = !!snapshot && !myColor && game.color === null;
+  const spectatorPlayers = isSpectator ? game.players : null;
 
   const drawOffer = game.drawOffer;
   const myOwnOffer = drawOffer && myColor && drawOffer.offeredBy === myColor;
@@ -187,31 +271,74 @@ function GameRoom(): React.JSX.Element {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* Left column: opponent strip + board + me strip + controls */}
         <div className="flex flex-col gap-3">
-          {/* Opponent strip */}
-          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-slate-200">
-                {opponent?.username ?? 'Opponent'}
-              </span>
-              {opponent && (
-                <span className="rounded-md border border-slate-700 bg-slate-900/60 px-2 py-0.5 font-mono text-xs text-neon-400">
-                  {opponent.elo}
+          {/* Opponent strip — or the spectator header when not a player */}
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+            {isSpectator ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                  <span className="size-1 rounded-full bg-amber-400" aria-hidden />
+                  Spectating
                 </span>
-              )}
-            </div>
+                <span className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold text-slate-200">
+                    {spectatorPlayers?.white.username ?? 'White'}
+                  </span>
+                  <span className="font-mono text-xs text-neon-400">
+                    {spectatorPlayers?.white.elo ?? ''}
+                  </span>
+                </span>
+                <span className="text-xs text-slate-500">vs</span>
+                <span className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold text-slate-200">
+                    {spectatorPlayers?.black.username ?? 'Black'}
+                  </span>
+                  <span className="font-mono text-xs text-neon-400">
+                    {spectatorPlayers?.black.elo ?? ''}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-200">
+                  {opponent?.username ?? 'Opponent'}
+                </span>
+                {opponent && (
+                  <span className="rounded-md border border-slate-700 bg-slate-900/60 px-2 py-0.5 font-mono text-xs text-neon-400">
+                    {opponent.elo}
+                  </span>
+                )}
+                {opponent && <OpponentFriendButton opponent={opponent} />}
+              </div>
+            )}
             <div className="flex items-center gap-3">
-              {!isGameOver && snapshot && !isMyTurn && (
+              {myColor && !isGameOver && snapshot && !isMyTurn && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-500/30 bg-neon-500/10 px-2 py-0.5 text-[11px] font-medium text-neon-400">
                   <span className="size-1 rounded-full bg-neon-400" aria-hidden />
                   Opponent to move
                 </span>
               )}
               {myColor && <CapturedPieces by={myColor === 'w' ? 'b' : 'w'} />}
-              <GameTimer
-                ms={myColor === 'w' ? blackMs : whiteMs}
-                active={isMyTurn === false && !isGameOver}
-                flagFallen={myColor === 'w' ? blackMs <= 0 : whiteMs <= 0}
-              />
+              {isSpectator ? (
+                <>
+                  <GameTimer
+                    ms={whiteMs}
+                    active={snapshot?.turn === 'w' && !isGameOver}
+                    flagFallen={whiteMs <= 0}
+                  />
+                  <span className="text-xs text-slate-600">·</span>
+                  <GameTimer
+                    ms={blackMs}
+                    active={snapshot?.turn === 'b' && !isGameOver}
+                    flagFallen={blackMs <= 0}
+                  />
+                </>
+              ) : (
+                <GameTimer
+                  ms={myColor === 'w' ? blackMs : whiteMs}
+                  active={isMyTurn === false && !isGameOver}
+                  flagFallen={myColor === 'w' ? blackMs <= 0 : whiteMs <= 0}
+                />
+              )}
             </div>
           </div>
 
@@ -234,75 +361,79 @@ function GameRoom(): React.JSX.Element {
             />
           </div>
 
-          {/* Me strip */}
-          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-            <div className="flex items-center gap-3">
-              {myColor && <CapturedPieces by={myColor} />}
-              <GameTimer
-                ms={myColor === 'w' ? whiteMs : blackMs}
-                active={isMyTurn && !isGameOver}
-                flagFallen={myColor === 'w' ? whiteMs <= 0 : blackMs <= 0}
-              />
-            </div>
-            {!isGameOver && snapshot && isMyTurn && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-500/30 bg-neon-500/10 px-2 py-0.5 text-[11px] font-medium text-neon-400">
-                <span
-                  className="size-1 rounded-full bg-neon-400 shadow-[0_0_6px_1px_var(--color-neon-400)]"
-                  aria-hidden
+          {/* Me strip (players only — spectators have no side) */}
+          {myColor && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+              <div className="flex items-center gap-3">
+                <CapturedPieces by={myColor} />
+                <GameTimer
+                  ms={myColor === 'w' ? whiteMs : blackMs}
+                  active={isMyTurn && !isGameOver}
+                  flagFallen={myColor === 'w' ? whiteMs <= 0 : blackMs <= 0}
                 />
-                Your move
-              </span>
-            )}
-          </div>
+              </div>
+              {!isGameOver && snapshot && isMyTurn && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-500/30 bg-neon-500/10 px-2 py-0.5 text-[11px] font-medium text-neon-400">
+                  <span
+                    className="size-1 rounded-full bg-neon-400 shadow-[0_0_6px_1px_var(--color-neon-400)]"
+                    aria-hidden
+                  />
+                  Your move
+                </span>
+              )}
+            </div>
+          )}
 
-          {/* Controls */}
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (gameId) void game.resign();
-              }}
-              disabled={!gameId || isGameOver}
-              className="rounded-lg border border-accent-rose/40 bg-accent-rose/10 px-4 py-2 text-sm font-semibold text-accent-rose transition hover:bg-accent-rose/20 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Resign
-            </button>
-            {drawOffer && !myOwnOffer ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (gameId) void game.acceptDraw();
-                  }}
-                  disabled={!gameId || isGameOver}
-                  className="rounded-lg bg-neon-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-neon-400 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Accept draw
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (gameId) void game.declineDraw();
-                  }}
-                  disabled={!gameId || isGameOver}
-                  className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Decline draw
-                </button>
-              </>
-            ) : (
+          {/* Controls (players only — spectators are read-only) */}
+          {myColor && (
+            <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 onClick={() => {
-                  if (gameId) void game.offerDraw();
+                  if (gameId) void game.resign();
                 }}
-                disabled={!gameId || isGameOver || !!myOwnOffer}
-                className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!gameId || isGameOver}
+                className="rounded-lg border border-accent-rose/40 bg-accent-rose/10 px-4 py-2 text-sm font-semibold text-accent-rose transition hover:bg-accent-rose/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {myOwnOffer ? 'Draw offered…' : 'Offer draw'}
+                Resign
               </button>
-            )}
-          </div>
+              {drawOffer && !myOwnOffer ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (gameId) void game.acceptDraw();
+                    }}
+                    disabled={!gameId || isGameOver}
+                    className="rounded-lg bg-neon-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-neon-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Accept draw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (gameId) void game.declineDraw();
+                    }}
+                    disabled={!gameId || isGameOver}
+                    className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Decline draw
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (gameId) void game.offerDraw();
+                  }}
+                  disabled={!gameId || isGameOver || !!myOwnOffer}
+                  className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {myOwnOffer ? 'Draw offered…' : 'Offer draw'}
+                </button>
+              )}
+            </div>
+          )}
 
           {game.lastAckError && game.lastAckError !== 'no_active_game' && (
             <p className="text-xs text-accent-rose">{game.lastAckError}</p>

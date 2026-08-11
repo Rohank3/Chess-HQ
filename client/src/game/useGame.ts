@@ -28,6 +28,9 @@ export interface UseGameResult {
   color: CommandColor | null;
   /** Opponent summary, from the game:subscribe ack (deep-linked rooms). */
   opponent: PlayerSummary | null;
+  /** Both players, from the game:subscribe ack — lets a spectator render a
+   *  read-only header with both names without being a player. */
+  players: { white: PlayerSummary; black: PlayerSummary } | null;
   /** Set when the game:subscribe ack failed -- the room can't load. */
   subscribeError: string | null;
   makeMove: (input: MoveInput) => Promise<Ack>;
@@ -68,6 +71,7 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
   const [lastAckError, setLastAckError] = useState<string | null>(null);
   const [color, setColor] = useState<CommandColor | null>(null);
   const [opponent, setOpponent] = useState<PlayerSummary | null>(null);
+  const [players, setPlayers] = useState<{ white: PlayerSummary; black: PlayerSummary } | null>(null);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,8 +87,11 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
       void emitWithAck(socket, 'game:subscribe', { gameId }).then((ack) => {
         if (ack.ok) {
           setSubscribeError(null);
+          // A spectator's ack carries color: null and no opponent, but both
+          // players — capture those so the header can render without a colour.
           if (ack.color) setColor(ack.color);
           if (ack.opponent) setOpponent(ack.opponent);
+          if (ack.white && ack.black) setPlayers({ white: ack.white, black: ack.black });
         } else {
           // A rejected subscribe means the room can't load (forbidden /
           // internal error) -- surface it instead of silently showing a
@@ -161,6 +168,7 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
     setLastAckError(null);
     setColor(null);
     setOpponent(null);
+    setPlayers(null);
     setSubscribeError(null);
   }, [gameId]);
 
@@ -222,6 +230,7 @@ export function useGame({ gameId }: UseGameInput): UseGameResult {
     lastAckError,
     color,
     opponent,
+    players,
     subscribeError,
     makeMove,
     resign,

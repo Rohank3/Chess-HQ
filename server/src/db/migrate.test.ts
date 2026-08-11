@@ -7,6 +7,28 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationPath = resolve(here, 'migrations/001_init.sql');
 const nullableTerminationPath = resolve(here, 'migrations/002_games_termination_nullable.sql');
+const friendshipsPath = resolve(here, 'migrations/003_friendships.sql');
+
+nodeTest(
+  '003 creates the friendships table with a symmetric pair-unique index',
+  async (_t: TestContext) => {
+    const sql = readFileSync(friendshipsPath, 'utf8');
+    assert.ok(
+      sql.includes('CREATE TABLE IF NOT EXISTS friendships'),
+      'friendships table must be created',
+    );
+    assert.ok(
+      sql.includes("status IN ('pending', 'accepted')"),
+      'friendship status must be pending/accepted',
+    );
+    assert.ok(
+      sql.includes('friendships_pair_unique') &&
+        sql.includes('LEAST(requester_id, addressee_id)') &&
+        sql.includes('GREATEST(requester_id, addressee_id)'),
+      'one row per unordered pair via the LEAST/GREATEST unique expression index',
+    );
+  },
+);
 
 nodeTest(
   '002 makes games.termination nullable so active-game INSERTs succeed',

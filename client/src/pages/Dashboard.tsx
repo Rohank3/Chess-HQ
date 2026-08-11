@@ -1,13 +1,17 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useStats } from '../hooks/useStats';
+import { useFriends } from '../hooks/useFriends';
 import { Spinner } from '../components/Spinner';
 import { EloDonut } from '../components/EloDonut';
 import { MatchHistoryTable } from '../components/MatchHistoryTable';
+import { FriendsSection } from '../components/FriendsSection';
+import { IncomingChallengesSection } from '../components/IncomingChallengesSection';
 
 export function Dashboard(): React.JSX.Element {
   const { user, loading } = useAuth();
   const { data, error, refresh } = useStats();
+  const friends = useFriends();
 
   if (loading) {
     return <Spinner label="Loading your dashboard…" />;
@@ -80,6 +84,14 @@ export function Dashboard(): React.JSX.Element {
           </div>
         </div>
       </section>
+
+      {/* Friends + incoming challenges (registered users only) ---------- */}
+      {!user.isGuest && (
+        <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <IncomingChallengesSection friends={friends} />
+          <FriendsSection friends={friends} />
+        </section>
+      )}
 
       {/* Stats + history grid -------------------------------------------- */}
       {error && !data ? (

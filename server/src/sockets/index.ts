@@ -6,10 +6,16 @@ import { startAbandonedGameSweep } from '../services/game-sweep.js';
 import { registerMatchmakingHandlers } from './matchmaking.js';
 import { registerChallengeHandlers } from './challenges.js';
 import { registerGameHandlers } from './game.js';
-import { registerUserSocket, unregisterUserSocket, rejoinActiveGames } from './lobby.js';
+import {
+  registerUserSocket,
+  unregisterUserSocket,
+  rejoinActiveGames,
+  setIo,
+} from './lobby.js';
 import { logger } from '../utils/logger.js';
 
 export function createSocketLayer(io: Server): void {
+  setIo(io);
   attachSocketAuth(io);
   matchmakingQueue.startCleanup();
   startAbandonedGameSweep();

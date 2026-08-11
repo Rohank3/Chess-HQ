@@ -6,7 +6,7 @@ import { gameState } from '../services/game-state.js';
 import { pool } from '../db/pool.js';
 import { roomForGame } from './index.js';
 import { ensureWatchdog } from './game.js';
-import { getSocketIdsForUser } from './lobby.js';
+import { getSocketIdsForUser, emitToUser } from './lobby.js';
 import { logger } from '../utils/logger.js';
 
 const challengeIdSchema = z.object({ challengeId: z.string().uuid() });
@@ -48,6 +48,11 @@ export function registerChallengeHandlers(io: Server, socket: Socket): void {
       }
       if (challenge.creatorUserId === socket.data.userId) {
         ack?.({ ok: false, error: 'cannot_join_own', message: 'You cannot accept your own challenge' });
+        return;
+      }
+      // A direct friend challenge is addressed to one user only.
+      if (challenge.targetUserId && challenge.targetUserId !== socket.data.userId) {
+        ack?.({ ok: false, error: 'not_addressed', message: 'This challenge was sent to someone else' });
         return;
       }
 
@@ -151,10 +156,50 @@ export function registerChallengeHandlers(io: Server, socket: Socket): void {
         return;
       }
       removeChallenge(challenge.id);
+      // If the intended acceptor is watching their dashboard, tell them the
+      // challenge is gone so it disappears without a refresh.
+      if (challenge.targetUserId) {
+        emitToUser(challenge.targetUserId, 'challenge:cancelled', {
+          challengeId: challenge.id,
+          creatorUserId: challenge.creatorUserId,
+        });
+      }
       ack?.({ ok: true, status: 'cancelled' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       logger.error('challenge_cancel_failed', { socketId: socket.id, message });
+      ack?.({ ok: false, error: 'internal_error', message: 'Internal error' });
+    }
+  });
+
+  // Decline a direct friend challenge (target only). The creator's waiting
+  // UI is cleared in realtime so they can immediately re-challenge or move on.
+  socket.on('challenge:decline', async (raw, ack) => {
+    try {
+      const parsed = challengeIdSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.({ ok: false, error: 'validation_error', message: parsed.error.issues[0]?.message });
+        return;
+      }
+      const challenge = getChallenge(parsed.data.challengeId);
+      if (!challenge) {
+        ack?.({ ok: false, error: 'challenge_not_found', message: 'Challenge not found or expired' });
+        return;
+      }
+      if (challenge.targetUserId !== socket.data.userId) {
+        ack?.({ ok: false, error: 'forbidden', message: 'Only the intended player can decline' });
+        return;
+      }
+      removeChallenge(challenge.id);
+      emitToUser(challenge.creatorUserId, 'challenge:declined', {
+        challengeId: challenge.id,
+        targetUserId: challenge.targetUserId,
+        targetUsername: socket.data.username,
+      });
+      ack?.({ ok: true, status: 'declined' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      logger.error('challenge_decline_failed', { socketId: socket.id, message });
       ack?.({ ok: false, error: 'internal_error', message: 'Internal error' });
     }
   });

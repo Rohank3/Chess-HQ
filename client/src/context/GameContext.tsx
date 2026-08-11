@@ -152,12 +152,15 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
   }, [queueState, setSearching]);
 
   // Report a live game app-wide. A freshly matched room (gameId set, snapshot
-  // still loading) counts as in-game; a finished game does not.
+  // still loading) counts as in-game; a finished game does not. A spectator
+  // (no colour from the subscribe ack) watching someone else's game is NOT
+  // in-game — the navbar badge is about the user's own activity.
   const isGameOver = !!game.gameOver || !!game.snapshot?.gameOver;
+  const isSpectator = gameId !== null && myColor === null && game.color === null;
   useEffect(() => {
-    setInGame(gameId !== null && !isGameOver);
+    setInGame(gameId !== null && !isGameOver && !isSpectator);
     return () => setInGame(false);
-  }, [gameId, isGameOver, setInGame]);
+  }, [gameId, isGameOver, isSpectator, setInGame]);
 
   // When the matchmaking layer transitions to 'matched', adopt the matched
   // gameId + color + opponent.
@@ -260,7 +263,16 @@ export function GameProvider({ children }: { children: ReactNode }): React.JSX.E
       // piece. The caller doesn't know which, so we snap-back and ask.
       const sourceStr = sourceSquare;
       const targetStr = targetSquare;
-      const movingPiece = piece?.pieceType ?? '';
+      // react-chessboard reports a dragged piece as 'wP'/'bP' (color-prefixed)
+      // while click-to-move passes the bare FEN letter ('P'/'p'). Normalize
+      // both to the lowercase FEN letter so promotion detection fires for
+      // drag-and-drop too -- otherwise a pawn dropped on the last rank silently
+      // auto-queens instead of opening the promotion dialog.
+      const pieceTypeRaw = piece?.pieceType ?? '';
+      const movingPiece =
+        pieceTypeRaw.length >= 2 && (pieceTypeRaw[0] === 'w' || pieceTypeRaw[0] === 'b')
+          ? pieceTypeRaw[1]!.toLowerCase()
+          : pieceTypeRaw.toLowerCase();
       const isLastRank =
         (myColor === 'w' && targetStr.endsWith('8')) ||
         (myColor === 'b' && targetStr.endsWith('1'));
