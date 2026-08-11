@@ -161,9 +161,12 @@ After redeploying, the **boot logs** verify the mail path by themselves:
   exact error (no need to register an account to find out).
 
 If `mail_smtp_check` reports `ok:false` with a timeout / ENETUNREACH even on
-the fixed build, Gmail's 465 port may be unreachable from Render's network:
-try `SMTP_PORT=587` with `SMTP_SECURE=false` (STARTTLS), or switch to the
-Resend provider (section 2), which goes out over plain HTTPS.
+the fixed build, SMTP egress is blocked from Render's network: on the free
+tier both Gmail ports (465 and 587) were observed timing out while the IPv6
+fallback dies instantly — no SMTP host or port will fix that. Switch to the
+**Resend provider** (section 2), which sends over plain HTTPS (port 443) and
+is never blocked. With `EMAIL_PROVIDER=resend`, the boot logs instead show
+`mail_resend_check` — a key-validity check that sends nothing.
 
 ### SMTP trade-offs vs a verified Resend domain
 

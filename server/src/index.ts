@@ -178,13 +178,13 @@ if (isProduction && env.EMAIL_PROVIDER === 'none') {
   logger.info('mail_config', mailConfig);
 }
 
-// Boot-time SMTP self-test: connect and authenticate against the configured
-// mail host WITHOUT sending a message (nodemailer's verify()). A broken mail
-// path — wrong credentials, blocked egress, or IPv6-only resolution on
-// Render's IPv4-only network — shows up in the boot logs as `mail_smtp_check
-// { ok:false }` within seconds, instead of surfacing later as a silent
-// no-show after someone registers. Fire-and-forget: a failed check must not
-// crash or delay the server, and it never touches a real recipient.
+// Boot-time mail self-test: prove the configured provider actually works
+// WITHOUT sending a message to a real recipient, so a broken path (wrong
+// credentials, blocked egress, IPv6-only resolution on Render's IPv4-only
+// network) shows up in the boot logs as `mail_smtp_check` /
+// `mail_resend_check` { ok:false } within seconds, instead of surfacing
+// later as a silent no-show after someone registers. Fire-and-forget: a
+// failed check must not crash or delay the server.
 const smtpHost = env.SMTP_HOST;
 if (
   env.EMAIL_PROVIDER === 'smtp' &&
@@ -208,6 +208,34 @@ if (
       logger.info('mail_smtp_check', { ...config, ok: true });
     } catch (err) {
       logger.error('mail_smtp_check', {
+        ...config,
+        ok: false,
+        message: err instanceof Error ? err.message : 'unknown',
+      });
+    }
+  })();
+} else if (env.EMAIL_PROVIDER === 'resend' && env.RESEND_API_KEY) {
+  const resendApiKey = env.RESEND_API_KEY;
+  void (async () => {
+    const config: Record<string, unknown> = { ...mailConfig };
+    try {
+      // Key-validity check only — nothing is sent, so no quota is consumed
+      // and no inbox is touched. GET /domains returns 200 for a valid key
+      // (even with zero domains configured) and 401 otherwise.
+      const res = await fetch('https://api.resend.com/domains', {
+        headers: { Authorization: `Bearer ${resendApiKey}` },
+      });
+      if (res.ok) {
+        logger.info('mail_resend_check', { ...config, ok: true, status: res.status });
+      } else {
+        logger.error('mail_resend_check', {
+          ...config,
+          ok: false,
+          status: res.status,
+        });
+      }
+    } catch (err) {
+      logger.error('mail_resend_check', {
         ...config,
         ok: false,
         message: err instanceof Error ? err.message : 'unknown',
